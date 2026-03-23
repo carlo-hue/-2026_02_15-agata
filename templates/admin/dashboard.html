@@ -1,0 +1,225 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Dashboard - AGATA Admin{% endblock %}
+{% block page_title %}Dashboard Amministrativa{% endblock %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+    <!-- Stats Cards -->
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="stat-value text-primary">{{ stats.active_projects }}</div>
+                <div class="stat-label">Progetti Attivi</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="stat-value text-warning">{{ stats.in_review_count }}</div>
+                <div class="stat-label">In Review</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="stat-value text-danger">{{ stats.blocked_projects }}</div>
+                <div class="stat-label">Progetti Bloccati</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="stat-value text-success">{{ stats.projects_by_state.get('accepted_aavso', 0) }}</div>
+                <div class="stat-label">Accepted AAVSO</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Projects by State -->
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Progetti per Stato</h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    {% for state, count in stats.projects_by_state.items() %}
+                    <div class="col-md-3">
+                        <div class="p-3 border rounded">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-muted">{{ state }}</span>
+                                <span class="badge bg-secondary">{{ count }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Projects by Association (superuser only) -->
+{% if is_superuser and stats.projects_by_association %}
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-building me-2"></i>Progetti per Associazione</h6>
+            </div>
+            <div class="card-body">
+                <table class="table table-hover table-admin">
+                    <thead>
+                        <tr>
+                            <th>Associazione</th>
+                            <th>Slug</th>
+                            <th class="text-end">Progetti Attivi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for assoc in stats.projects_by_association %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('admin.association_detail', association_id=assoc.id) }}">
+                                    {{ assoc.name }}
+                                </a>
+                            </td>
+                            <td><code>{{ assoc.slug }}</code></td>
+                            <td class="text-end">
+                                <span class="badge bg-primary">{{ assoc.active_projects }}</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Two columns: Blocked Projects + Review Backlog -->
+<div class="row g-4 mb-4">
+    <!-- Blocked Projects -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Progetti Bloccati</h6>
+                <a href="{{ url_for('admin.list_projects', state='assigned') }}" class="btn btn-sm btn-outline-primary">
+                    Vedi tutti
+                </a>
+            </div>
+            <div class="card-body">
+                {% if blocked_projects %}
+                <div class="list-group list-group-flush">
+                    {% for project in blocked_projects[:5] %}
+                    <div class="list-group-item px-0">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <a href="{{ url_for('admin.project_detail', project_id=project.id) }}" class="text-decoration-none">
+                                    <strong>{{ project.project_code }}</strong>
+                                </a>
+                                <div class="small text-muted">
+                                    Gaia: {{ project.gaia_id }}<br>
+                                    Assegnato a: {{ project.assigned_user_name }}<br>
+                                    <span class="text-danger">{{ project.days_assigned }} giorni fa</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Nessun progetto bloccato</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Review Backlog -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-clock text-warning me-2"></i>Backlog Review</h6>
+                <a href="{{ url_for('admin.list_projects', state='in_review') }}" class="btn btn-sm btn-outline-primary">
+                    Vedi tutti
+                </a>
+            </div>
+            <div class="card-body">
+                {% if review_backlog %}
+                <div class="list-group list-group-flush">
+                    {% for project in review_backlog[:5] %}
+                    <div class="list-group-item px-0">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <a href="{{ url_for('admin.project_detail', project_id=project.id) }}" class="text-decoration-none">
+                                    <strong>{{ project.project_code }}</strong>
+                                </a>
+                                <div class="small text-muted">
+                                    Gaia: {{ project.gaia_id }}<br>
+                                    Da: {{ project.assigned_user_name }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Nessun progetto in review</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row g-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Ultimi Eventi</h6>
+                <a href="{{ url_for('admin.audit_log') }}" class="btn btn-sm btn-outline-primary">
+                    Vedi audit log completo
+                </a>
+            </div>
+            <div class="card-body">
+                {% if recent_events %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Data/Ora</th>
+                                <th>Utente</th>
+                                <th>Azione</th>
+                                <th>Descrizione</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for event in recent_events %}
+                            <tr>
+                                <td class="text-muted small">{{ event.created_at }}</td>
+                                <td>{{ event.user_email }}</td>
+                                <td><code class="small">{{ event.action }}</code></td>
+                                <td class="small">{{ event.description }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Nessun evento recente</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

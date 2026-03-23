@@ -1,0 +1,281 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ user.full_name }} - AGATA Admin{% endblock %}
+{% block page_title %}
+    <div class="d-flex align-items-center">
+        <a href="{{ url_for('admin.list_users') }}" class="btn btn-sm btn-outline-secondary me-3">
+            <i class="bi bi-arrow-left"></i> Torna agli utenti
+        </a>
+        <div>
+            <h5 class="mb-0">{{ user.full_name }}</h5>
+            <small class="text-muted">{{ user.email }}</small>
+        </div>
+    </div>
+{% endblock %}
+{% block content %}
+<div class="row g-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-person-badge me-2"></i>Informazioni Utente</h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <strong>Ruolo:</strong>
+                    <span class="badge {% if user.role == 'superuser' %}bg-danger{% elif user.role == 'admin' %}bg-warning{% else %}bg-secondary{% endif %}">
+                        {{ user.role }}
+                    </span>
+                </div>
+                <div class="mb-3">
+                    <strong>Associazione:</strong> {{ user.association.name if user.association else 'Nessuna' }}
+                </div>
+                <div class="mb-3">
+                    <strong>Stato:</strong>
+                    {% if user.is_active %}
+                    <span class="badge bg-success">Attivo</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Sospeso</span>
+                    {% endif %}
+                </div>
+                <div class="mb-3">
+                    <strong>Provider OAuth:</strong> {{ user.provider or 'N/A' }}
+                </div>
+                <div class="mb-3">
+                    <strong>Ultimo accesso:</strong> {{ user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else 'Mai' }}
+                </div>
+                <div class="mb-3">
+                    <strong>Creato:</strong> {{ user.created_at.strftime('%Y-%m-%d') if user.created_at else 'N/A' }}
+                </div>
+
+                {% if can_edit %}
+                <hr>
+                <div class="btn-group" role="group">
+                    <button class="btn btn-sm btn-warning" onclick="toggleActive()">
+                        <i class="bi bi-power"></i> {% if user.is_active %}Sospendi{% else %}Attiva{% endif %}
+                    </button>
+                    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#changeRoleModal">
+                        <i class="bi bi-shield"></i> Cambia Ruolo
+                    </button>
+                    {% if is_superuser %}
+                    <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#changeAssociationModal">
+                        <i class="bi bi-building"></i> Cambia Associazione
+                    </button>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if assigned_projects %}
+        <div class="card mt-4">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-folder me-2"></i>Progetti Assegnati</h6>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    {% for proj in assigned_projects %}
+                    <div class="list-group-item px-0">
+                        <a href="{{ url_for('admin.project_detail', project_id=proj.id) }}">
+                            <strong>{{ proj.project_code }}</strong>
+                        </a>
+                        <span class="badge bg-secondary ms-2">{{ proj.state }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Attività Recente (ultimi 30 giorni)</h6>
+            </div>
+            <div class="card-body">
+                {% if activity %}
+                <div class="list-group list-group-flush">
+                    {% for event in activity[:10] %}
+                    <div class="list-group-item px-0">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <code class="small">{{ event.action }}</code><br>
+                                <small class="text-muted">{{ event.description }}</small>
+                            </div>
+                            <small class="text-muted">{{ event.created_at.strftime('%Y-%m-%d') if event.created_at else 'N/A' }}</small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">Nessuna attività recente</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Change Role -->
+<div class="modal fade" id="changeRoleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Cambia Ruolo Utente</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="roleForm">
+                    <div class="mb-3">
+                        <label class="form-label">Nuovo Ruolo</label>
+                        <select class="form-select" name="role" required>
+                            <option value="viewer" {% if user.role == 'viewer' %}selected{% endif %}>Viewer</option>
+                            <option value="analyst" {% if user.role == 'analyst' %}selected{% endif %}>Analyst</option>
+                            <option value="reviewer" {% if user.role == 'reviewer' %}selected{% endif %}>Reviewer</option>
+                            {% if current_user.role == 'superuser' %}
+                            <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
+                            <option value="superuser" {% if user.role == 'superuser' %}selected{% endif %}>Superuser</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-primary" onclick="submitRoleChange()">Salva</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Change Association (solo superuser) -->
+{% if is_superuser %}
+<div class="modal fade" id="changeAssociationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Cambia Associazione Utente</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Attenzione:</strong> Cambiando associazione, l'utente perderà accesso ai progetti della vecchia associazione.
+                </div>
+                <form id="associationForm">
+                    <div class="mb-3">
+                        <label class="form-label">Associazione Attuale</label>
+                        <input type="text" class="form-control" value="{{ user.association.name if user.association else 'Nessuna' }}" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nuova Associazione</label>
+                        <select class="form-select" name="association_id" id="newAssociationSelect" required>
+                            <option value="">- Caricamento... -</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-primary" onclick="submitAssociationChange()">Salva</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const USER_ID = '{{ user.id }}';
+
+function toggleActive() {
+    if (!confirm('Confermi di voler {% if user.is_active %}sospendere{% else %}attivare{% endif %} questo utente?')) return;
+
+    fetch(`/agata/admin/api/users/${USER_ID}/toggle-active`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Stato utente aggiornato');
+            location.reload();
+        } else {
+            alert('Errore: ' + data.error);
+        }
+    });
+}
+
+function submitRoleChange() {
+    const form = document.getElementById('roleForm');
+    const data = new FormData(form);
+
+    fetch(`/agata/admin/api/users/${USER_ID}/update-role`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({role: data.get('role')})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Ruolo aggiornato');
+            location.reload();
+        } else {
+            alert('Errore: ' + data.error);
+        }
+    });
+}
+
+{% if is_superuser %}
+// Carica associazioni quando si apre il modal
+document.getElementById('changeAssociationModal').addEventListener('show.bs.modal', function() {
+    const select = document.getElementById('newAssociationSelect');
+    select.innerHTML = '<option value="">- Caricamento... -</option>';
+
+    fetch('/agata/admin/api/associations-list')
+        .then(r => r.json())
+        .then(associations => {
+            select.innerHTML = '<option value="">- Seleziona Associazione -</option>';
+            associations.forEach(assoc => {
+                const selected = assoc.id == {{ user.association_id or 0 }} ? 'selected' : '';
+                select.innerHTML += `<option value="${assoc.id}" ${selected}>${assoc.name}</option>`;
+            });
+        })
+        .catch(err => {
+            select.innerHTML = '<option value="">- Errore caricamento -</option>';
+            console.error(err);
+        });
+});
+
+function submitAssociationChange() {
+    const select = document.getElementById('newAssociationSelect');
+    const associationId = select.value;
+
+    if (!associationId) {
+        alert('Seleziona un\'associazione');
+        return;
+    }
+
+    if (!confirm('Confermi di voler cambiare l\'associazione di questo utente?')) return;
+
+    fetch(`/agata/admin/api/users/${USER_ID}/change-association`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({association_id: parseInt(associationId)})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(`Utente spostato in ${data.association_name}`);
+            location.reload();
+        } else {
+            alert('Errore: ' + data.error);
+        }
+    })
+    .catch(err => {
+        alert('Errore di rete');
+        console.error(err);
+    });
+}
+{% endif %}
+</script>
+{% endblock %}

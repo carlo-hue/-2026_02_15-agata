@@ -1,0 +1,1 @@
+"""AGATA modules namespace for new components."""

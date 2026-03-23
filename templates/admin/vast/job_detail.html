@@ -1,0 +1,596 @@
+{% extends "admin/base.html" %}
+
+{% block title %}VAST Job {{ job.job_code }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Navigation -->
+    <div class="mb-4">
+        <a href="{{ url_for('admin.vast_automation_page') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Jobs
+        </a>
+    </div>
+
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1>
+                <i class="fas fa-satellite-dish"></i>
+                {{ job.job_code }}
+            </h1>
+            <p class="text-muted mb-0"><strong>Target:</strong> {{ job.target_name }}</p>
+        </div>
+        <div class="col-auto">
+            <span class="badge bg-{{
+                'success' if job.state == 'completed'
+                else 'danger' if job.state == 'failed'
+                else 'warning' if job.is_running
+                else 'secondary'
+            }} fs-6">
+                <i class="fas fa-{{
+                    'circle-check' if job.state == 'completed'
+                    else 'circle-xmark' if job.state == 'failed'
+                    else 'spinner' if job.is_running
+                    else 'circle'
+                }}"></i>
+                {{ job.state | title }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Job Status Card -->
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Job Status & Progress</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Progress Bar -->
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between mb-2">
+                            <strong>Overall Progress</strong>
+                            <span class="badge bg-primary">{{ job.progress_pct }}%</span>
+                        </div>
+                        <div class="progress" style="height: 30px;">
+                            <div class="progress-bar {{ 'bg-danger' if job.state == 'failed' else 'bg-success' if job.state == 'completed' else '' }}"
+                                 role="progressbar"
+                                 style="width: {{ job.progress_pct }}%"
+                                 aria-valuenow="{{ job.progress_pct }}"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100">
+                                {{ job.progress_pct }}%
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Status Info -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="row mb-0">
+                                <dt class="col-sm-5">State</dt>
+                                <dd class="col-sm-7">
+                                    <span class="badge bg-{{
+                                        'success' if job.state == 'completed'
+                                        else 'danger' if job.state == 'failed'
+                                        else 'warning' if job.is_running
+                                        else 'secondary'
+                                    }}">
+                                        {{ job.state | title }}
+                                    </span>
+                                </dd>
+
+                                <dt class="col-sm-5">Current Step</dt>
+                                <dd class="col-sm-7">
+                                    {% if job.current_step %}
+                                        <i class="fas fa-arrow-right text-info"></i>
+                                        {{ job.current_step }}
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </dd>
+
+                                <dt class="col-sm-5">Created</dt>
+                                <dd class="col-sm-7">
+                                    {{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                                </dd>
+                            </dl>
+                        </div>
+
+                        <div class="col-md-6">
+                            <dl class="row mb-0">
+                                {% if job.started_at %}
+                                <dt class="col-sm-5">Started</dt>
+                                <dd class="col-sm-7">
+                                    {{ job.started_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                                </dd>
+                                {% endif %}
+
+                                {% if job.completed_at %}
+                                <dt class="col-sm-5">Completed</dt>
+                                <dd class="col-sm-7">
+                                    {{ job.completed_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                                    {% if job.duration_seconds %}
+                                    <br><small class="text-muted">{{ "%.1f"|format(job.duration_seconds / 60) }} minutes</small>
+                                    {% endif %}
+                                </dd>
+                                {% endif %}
+                            </dl>
+                        </div>
+                    </div>
+
+                    {% if job.error_message %}
+                    <div class="alert alert-danger mt-4 mb-0">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-exclamation-triangle"></i> Error
+                        </h6>
+                        <code>{{ job.error_message }}</code>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics Sidebar -->
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Processing Metrics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <h6 class="text-muted">Images Downloaded</h6>
+                        <h3 class="mb-0">
+                            <span class="badge bg-info fs-5">{{ job.images_downloaded }}</span>
+                        </h3>
+                    </div>
+
+                    <div class="text-center mb-3">
+                        <h6 class="text-muted">WCS Validated</h6>
+                        <h3 class="mb-0">
+                            <span class="badge bg-info fs-5">{{ job.images_solved }}</span>
+                        </h3>
+                    </div>
+
+                    <div class="text-center mb-3">
+                        <h6 class="text-muted">Candidates Found</h6>
+                        <h3 class="mb-0">
+                            <span class="badge bg-success fs-5">{{ job.candidates_found }}</span>
+                        </h3>
+                    </div>
+
+                    <div class="text-center">
+                        <h6 class="text-muted">Stars Uploaded</h6>
+                        <h3 class="mb-0">
+                            <span class="badge bg-primary fs-5">{{ job.stars_uploaded }}</span>
+                        </h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Job Info Card -->
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Job Info</h5>
+                </div>
+                <div class="card-body small">
+                    <dl class="mb-0">
+                        <dt>Source Type</dt>
+                        <dd>{{ job.source_type | title }}</dd>
+
+                        <dt>Source Location</dt>
+                        <dd>
+                            <code style="word-break: break-all;">{{ job.source_location[:50] }}</code>
+                        </dd>
+
+                        <dt>Created By</dt>
+                        <dd>{{ job.requester.email if job.requester else 'Unknown' }}</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Table -->
+    {% if job.results %}
+    <div class="card">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-star"></i>
+                Stars Detected ({{ job.results | length }})
+            </h5>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-success" id="toggleKnown" onclick="toggleKnownOnly()">
+                    <i class="fas fa-star"></i> Known Variables Only
+                </button>
+                <div>
+                    <select class="form-select form-select-sm" id="pageSizeSelect" onchange="changePageSize()" style="width: auto; display: inline-block;">
+                        <option value="25">25 per page</option>
+                        <option value="50" selected>50 per page</option>
+                        <option value="100">100 per page</option>
+                        <option value="999999">Show All</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0" id="resultsTable">
+                <thead>
+                    <tr class="table-light">
+                        <th>VAST ID</th>
+                        <th>Gaia Source</th>
+                        <th>RA</th>
+                        <th>Dec</th>
+                        <th>V Mag</th>
+                        <th>Mean Mag</th>
+                        <th>Std Dev</th>
+                        <th>Var Index</th>
+                        <th>Variable Type</th>
+                        <th>Catalogs</th>
+                        <th>Valid</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    {% for result in job.results %}
+                    <tr class="
+                        {%- if not result.is_valid %} row-invalid
+                        {%- elif result.is_known_variable %} row-known-variable
+                        {%- elif result.is_variable %} table-highlight
+                        {%- endif %}"
+                        data-valid="{{ result.is_valid | lower }}"
+                        data-known="{{ result.is_known_variable | lower }}">
+                        <td>
+                            <span class="font-monospace small">{{ result.vast_id or 'N/A' }}</span>
+                        </td>
+                        <td>
+                            {% if result.gaia_source_id %}
+                            <a href="https://gea.esac.esa.int/archive/visualization/" target="_blank"
+                               class="font-monospace small" title="Gaia Source ID">
+                                {{ result.gaia_source_id }}
+                            </a>
+                            {% else %}
+                            <span class="text-muted small">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-mono small">
+                            {% if result.ra != 0 %}{{ "%.6f"|format(result.ra) }}{% else %}<span class="text-muted">-</span>{% endif %}
+                        </td>
+                        <td class="text-mono small">
+                            {% if result.decl != 0 %}{{ "%.6f"|format(result.decl) }}{% else %}<span class="text-muted">-</span>{% endif %}
+                        </td>
+                        <td>
+                            {% if result.vmag %}
+                                <strong>{{ "%.3f"|format(result.vmag) }}</strong>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if result.mean_mag %}
+                                {{ "%.3f"|format(result.mean_mag) }}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if result.std_dev %}
+                                {{ "%.4f"|format(result.std_dev) }}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if result.variability_index %}
+                                <span class="badge {{ 'bg-danger' if result.is_variable else 'bg-secondary' }}">
+                                    {{ "%.4f"|format(result.variability_index) }}
+                                </span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if result.variable_type %}
+                                <span class="badge bg-warning text-dark">{{ result.variable_type }}</span>
+                            {% elif result.candidate_flag and result.is_valid %}
+                                <span class="badge bg-info">candidate</span>
+                            {% else %}
+                            <span class="text-muted small">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if result.catalog_matches %}
+                                <span class="small">{{ result.catalog_matches }}</span>
+                            {% else %}
+                            <span class="text-muted small">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if result.is_known_variable %}
+                                <i class="fas fa-star text-warning" title="Known variable"></i>
+                            {% elif not result.is_valid %}
+                                <i class="fas fa-times-circle text-danger" title="FRACTION_OF (invalid)"></i>
+                            {% else %}
+                                <i class="fas fa-check-circle text-success" title="Valid"></i>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div class="card-footer d-flex justify-content-between align-items-center">
+            <small class="text-muted" id="pageInfo"></small>
+            <nav aria-label="Results pagination">
+                <ul class="pagination pagination-sm mb-0" id="pagination"></ul>
+            </nav>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i>
+        No results yet.
+        {% if not job.state == 'completed' %}
+        Job is still running...
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Promotion Card -->
+    {% if job.state == 'completed' and job.results %}
+    <div class="card mt-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">
+                <i class="fas fa-upload"></i>
+                Promote to Cataloghi_esterni
+            </h5>
+        </div>
+        <div class="card-body">
+            {% if is_promoted %}
+            <div class="alert alert-success mb-3">
+                <i class="fas fa-check-circle"></i>
+                <strong>Already promoted to Cataloghi_esterni.</strong>
+                {% if job.output_files and job.output_files.promotion %}
+                    Promoted by {{ job.output_files.promotion.promoted_by }}
+                    on {{ job.output_files.promotion.promoted_at[:10] }}.
+                    Stars: {{ job.output_files.promotion.stats.stars_promoted }},
+                    Lightcurve points: {{ job.output_files.promotion.stats.lightcurve_points }}.
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <p class="text-muted small mb-3">
+                This will transfer VAST lightcurve data (.dat files) and calibrated coordinates
+                into <code>Cataloghi_esterni</code> as a bulk import with catalog name <code>VAST</code>.
+                The data will be available in the central repository for associations to claim and create projects.
+            </p>
+
+            <div class="row g-3 align-items-end">
+                <div class="col-auto">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="promoteExcludeKnown">
+                        <label class="form-check-label" for="promoteExcludeKnown">
+                            Exclude known variables
+                        </label>
+                    </div>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-primary" id="btnPromote" onclick="promoteResults()">
+                        <i class="fas fa-rocket"></i> Promote to Cataloghi_esterni
+                    </button>
+                </div>
+            </div>
+
+            <div id="promoteResult" class="mt-3" style="display: none;"></div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Auto-refresh for running jobs -->
+{% if job.is_running %}
+<script>
+console.log('Job is running, will auto-refresh in 5s...');
+setTimeout(() => location.reload(), 5000);
+</script>
+{% endif %}
+
+<style>
+.text-mono {
+    font-family: 'Courier New', monospace;
+}
+.table-highlight {
+    background-color: #fff3cd;
+}
+.row-known-variable {
+    background-color: #d4edda;
+}
+.row-invalid {
+    background-color: #f8d7da;
+    opacity: 0.6;
+}
+.row-hidden {
+    display: none;
+}
+.pagination-sm .page-link {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+</style>
+
+<script>
+// ==================== PAGINATION ====================
+let currentPage = 1;
+let pageSize = 50;
+let showKnownOnly = false;
+let allRows = [];
+
+function initPagination() {
+    // Collect all rows (originally in tableBody)
+    allRows = Array.from(document.querySelectorAll('#tableBody tr'));
+    renderPage();
+    updatePagination();
+}
+
+function changePageSize() {
+    pageSize = parseInt(document.getElementById('pageSizeSelect').value);
+    currentPage = 1;
+    renderPage();
+    updatePagination();
+}
+
+function getVisibleRows() {
+    // Apply filter and get visible rows
+    return allRows.filter(row => {
+        const isKnown = row.dataset.known === 'true';
+        if (showKnownOnly && !isKnown) return false;
+        return true;
+    });
+}
+
+function renderPage() {
+    const visibleRows = getVisibleRows();
+    const totalPages = Math.ceil(visibleRows.length / pageSize);
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
+
+    // Hide all rows
+    allRows.forEach(row => row.classList.add('row-hidden'));
+
+    // Show only current page rows
+    visibleRows.slice(start, end).forEach(row => row.classList.remove('row-hidden'));
+
+    // Update info text
+    const totalVisible = visibleRows.length;
+    const showingFrom = totalVisible === 0 ? 0 : start + 1;
+    const showingTo = Math.min(end, totalVisible);
+    document.getElementById('pageInfo').textContent =
+        `Showing ${showingFrom}-${showingTo} of ${totalVisible} stars`;
+}
+
+function updatePagination() {
+    const visibleRows = getVisibleRows();
+    const totalPages = Math.ceil(visibleRows.length / pageSize);
+    const paginationEl = document.getElementById('pagination');
+    paginationEl.innerHTML = '';
+
+    // Prev button
+    const prevLi = document.createElement('li');
+    prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+    prevLi.innerHTML = `<a class="page-link" href="#" onclick="goToPage(${currentPage - 1}); return false;">Previous</a>`;
+    paginationEl.appendChild(prevLi);
+
+    // Page numbers
+    for (let i = 1; i <= totalPages; i++) {
+        // Show all pages if total <= 10, otherwise show ellipsis
+        if (totalPages <= 10 || i === 1 || i === totalPages ||
+            (i >= currentPage - 2 && i <= currentPage + 2)) {
+
+            const li = document.createElement('li');
+            li.className = `page-item ${i === currentPage ? 'active' : ''}`;
+            li.innerHTML = `<a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>`;
+            paginationEl.appendChild(li);
+        } else if (i === currentPage - 3 || i === currentPage + 3) {
+            const li = document.createElement('li');
+            li.className = 'page-item disabled';
+            li.innerHTML = '<span class="page-link">...</span>';
+            paginationEl.appendChild(li);
+        }
+    }
+
+    // Next button
+    const nextLi = document.createElement('li');
+    nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+    nextLi.innerHTML = `<a class="page-link" href="#" onclick="goToPage(${currentPage + 1}); return false;">Next</a>`;
+    paginationEl.appendChild(nextLi);
+}
+
+function goToPage(page) {
+    const visibleRows = getVisibleRows();
+    const totalPages = Math.ceil(visibleRows.length / pageSize);
+    if (page >= 1 && page <= totalPages) {
+        currentPage = page;
+        renderPage();
+        updatePagination();
+        // Scroll to table
+        document.getElementById('resultsTable').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+function toggleKnownOnly() {
+    showKnownOnly = !showKnownOnly;
+    const btn = document.getElementById('toggleKnown');
+    btn.classList.toggle('btn-success', showKnownOnly);
+    btn.classList.toggle('btn-outline-success', !showKnownOnly);
+    currentPage = 1; // Reset to first page
+    renderPage();
+    updatePagination();
+}
+
+// Initialize pagination on page load
+document.addEventListener('DOMContentLoaded', initPagination);
+
+function promoteResults() {
+    const btn = document.getElementById('btnPromote');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Promoting...';
+
+    const resultDiv = document.getElementById('promoteResult');
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-hourglass-half"></i> Transferring to Cataloghi_esterni... This may take a few minutes.</div>';
+
+    const excludeKnown = document.getElementById('promoteExcludeKnown').checked;
+
+    fetch('{{ url_for("admin.api_promote_vast_job", job_id=job.id) }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            exclude_known_variables: excludeKnown
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-rocket"></i> Promote to Cataloghi_esterni';
+
+        if (data.success) {
+            const s = data.stats;
+            let errHtml = '';
+            if (s.errors && s.errors.length > 0) {
+                errHtml = `<br><small class="text-warning">${s.errors.length} errors occurred</small>`;
+            }
+            const importLink = s.import_id
+                ? `<br><br><a href="/agata/admin/stars-catalog?import_id=${s.import_id}" class="btn btn-sm btn-primary"><i class="fas fa-list"></i> View in Stars Catalog (Import #${s.import_id})</a>`
+                : '';
+            resultDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i>
+                    <strong>Transfer to Cataloghi_esterni complete!</strong><br>
+                    Stars promoted: <strong>${s.stars_promoted}</strong><br>
+                    Lightcurve points inserted: <strong>${s.lightcurve_points}</strong><br>
+                    Skipped (no Gaia ID): ${s.skipped_no_gaia}<br>
+                    Import ID: <strong>#${s.import_id || 'N/A'}</strong>
+                    ${errHtml}
+                    ${importLink}
+                </div>`;
+        } else {
+            resultDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Error:</strong> ${data.error}
+                </div>`;
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-rocket"></i> Promote to Cataloghi_esterni';
+        resultDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>Network error:</strong> ${err.message}
+            </div>`;
+    });
+}
+</script>
+{% endblock %}

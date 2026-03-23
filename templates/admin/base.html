@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}AGATA Admin{% endblock %}</title>
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+    <style>
+        :root {
+            --sidebar-width: 260px;
+            --header-height: 60px;
+        }
+
+        body {
+            font-size: 0.95rem;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: var(--sidebar-width);
+            background: #1a1d29;
+            color: #fff;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+
+        .sidebar-brand {
+            padding: 1.5rem 1rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-section {
+            padding: 0.75rem 1rem;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: #6c757d;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-link {
+            color: rgba(255,255,255,0.7);
+            padding: 0.65rem 1rem;
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+        }
+
+        .nav-link.active {
+            background: rgba(0,123,255,0.15);
+            color: #0d6efd;
+            border-left: 3px solid #0d6efd;
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            font-size: 1.1rem;
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main content */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            min-height: 100vh;
+            background: #f8f9fa;
+        }
+
+        /* Header */
+        .admin-header {
+            background: #fff;
+            height: var(--header-height);
+            border-bottom: 1px solid #dee2e6;
+            padding: 0 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .content-wrapper {
+            padding: 2rem;
+        }
+
+        /* Stats cards */
+        .stat-card {
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .stat-card .card-body {
+            padding: 1.5rem;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        /* Badges */
+        .badge-state {
+            padding: 0.4em 0.8em;
+            font-weight: 500;
+            font-size: 0.85rem;
+        }
+
+        /* Tables */
+        .table-admin {
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .table-admin th {
+            background: #f8f9fa;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        /* Action buttons */
+        .btn-action {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.875rem;
+        }
+
+        /* Module navigation styling */
+        .nav-link.active-module {
+            background: rgba(13, 110, 253, 0.2);
+            color: #0d6efd;
+            border-left: 3px solid #0d6efd;
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <i class="bi bi-stars"></i> AGATA Admin
+        </div>
+
+        <div class="sidebar-nav">
+            <!-- Sezione Moduli Principali -->
+            <div class="nav-section">Moduli Principali</div>
+            <a href="{{ url_for('variable_stars.index') }}" class="nav-link">
+                <i class="bi bi-graph-up"></i>
+                Editor Stelle
+            </a>
+            <a href="javascript:void(0)" onclick="navigateToExoplanets()" class="nav-link">
+                <i class="bi bi-globe"></i>
+                Esopianeti
+            </a>
+            {% if current_user.role in ['admin', 'superuser'] %}
+            <div class="nav-section mt-3">Panoramica</div>
+            <a href="{{ url_for('admin.dashboard') }}" class="nav-link">
+                <i class="bi bi-speedometer2"></i>
+                Dashboard
+            </a>
+            {% endif %}
+
+            <div class="nav-section {% if current_user.role in ['admin', 'superuser'] %}mt-3{% endif %}">{% if current_user.role == 'analyst' %}Analisi{% else %}Gestione{% endif %}</div>
+            <a href="{{ url_for('admin.list_projects') }}" class="nav-link">
+                <i class="bi bi-folder"></i>
+                Progetti
+            </a>
+            <a href="{{ url_for('admin.stars_catalog_page') }}" class="nav-link">
+                <i class="bi bi-star"></i>
+                Catalogo Stelle
+            </a>
+            <a href="{{ url_for('admin.external_catalogs_page') }}" class="nav-link">
+                <i class="bi bi-cloud-download"></i>
+                {% if current_user.role == 'analyst' %}Carica Dati{% else %}Importa da Esterni{% endif %}
+            </a>
+            {% if current_user.role in ['admin', 'superuser'] %}
+            <a href="{{ url_for('admin.list_associations') }}" class="nav-link">
+                <i class="bi bi-building"></i>
+                Associazioni
+            </a>
+            <a href="{{ url_for('admin.list_users') }}" class="nav-link">
+                <i class="bi bi-people"></i>
+                Utenti
+            </a>
+            {% endif %}
+
+            {% if current_user.role in ['admin', 'superuser'] %}
+            <div class="nav-section mt-3">Sistema</div>
+            <a href="{{ url_for('admin.workflow_overview') }}" class="nav-link">
+                <i class="bi bi-diagram-3"></i>
+                Workflow
+            </a>
+            <a href="{{ url_for('admin.slack_overview') }}" class="nav-link">
+                <i class="bi bi-slack"></i>
+                Slack
+            </a>
+            <a href="{{ url_for('admin.audit_log') }}" class="nav-link">
+                <i class="bi bi-clock-history"></i>
+                Audit Log
+            </a>
+
+            {% if current_user.role == 'superuser' %}
+            <a href="{{ url_for('admin.vast_automation_page') }}" class="nav-link">
+                <i class="bi bi-satellite-dish"></i>
+                VAST Automation
+            </a>
+            <a href="{{ url_for('admin.system_config') }}" class="nav-link">
+                <i class="bi bi-gear"></i>
+                Configurazioni
+            </a>
+            {% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Header -->
+        <div class="admin-header">
+            <div>
+                <h5 class="mb-0">{% block page_title %}Dashboard{% endblock %}</h5>
+            </div>
+            <div class="d-flex align-items-center">
+                <span class="me-3">
+                    <i class="bi bi-person-circle"></i>
+                    {{ current_user.full_name }}
+                    <span class="badge bg-primary ms-1">{{ current_user.role }}</span>
+                </span>
+                <a href="{{ url_for('auth.logout') }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </a>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="content-wrapper">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <!-- Bootstrap Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Plotly JS (locale) -->
+    <script src="{{ url_for('admin.static', filename='js/plotly-2.30.0.min.js') }}"></script>
+
+    <script>
+        function navigateToExoplanets() {
+            window.location.href = "{{ url_for('exoplanets.index') }}";
+        }
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,769 @@
+/**
+ * exoplanets.css - Stili Modulo Esopianeti AGATA
+ * 
+ * Design moderno e funzionale per analisi transiti esopianeti
+ */
+
+/* =============================================================================
+   VARIABILI CSS
+   ============================================================================= */
+
+:root {
+    --primary-color: #3498db;
+    --secondary-color: #9b59b6;
+    --success-color: #27ae60;
+    --warning-color: #f39c12;
+    --error-color: #e74c3c;
+    --info-color: #16a085;
+    
+    --bg-light: #ecf0f1;
+    --bg-white: #ffffff;
+    --text-dark: #2c3e50;
+    --text-muted: #7f8c8d;
+    
+    --border-radius: 8px;
+    --box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    --transition: all 0.3s ease;
+}
+
+
+/* =============================================================================
+   PANNELLI
+   ============================================================================= */
+
+.data-source-panel,
+.upload-panel,
+.controls-panel,
+.plot-panel,
+.bls-panel,
+.results-panel,
+.info-panel {
+    background: var(--bg-white);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    padding: 2rem;
+    margin-bottom: 2rem;
+}
+
+.data-source-panel h2,
+.upload-panel h2,
+.controls-panel h2,
+.plot-panel h2,
+.bls-panel h2,
+.results-panel h2,
+.info-panel h2 {
+    color: var(--text-dark);
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--primary-color);
+}
+
+
+/* =============================================================================
+   DATA SOURCE SELECTION
+   ============================================================================= */
+
+.data-source-selector {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.data-source-selector label {
+    flex: 1;
+    min-width: 200px;
+    cursor: pointer;
+}
+
+.data-source-selector input[type="radio"] {
+    display: none;
+}
+
+.source-option {
+    display: block;
+    padding: 1.5rem;
+    border: 2px solid var(--bg-light);
+    border-radius: var(--border-radius);
+    background: var(--bg-white);
+    text-align: center;
+    font-size: 1.1rem;
+    transition: var(--transition);
+}
+
+.data-source-selector input[type="radio"]:checked + .source-option {
+    border-color: var(--primary-color);
+    background: rgba(52, 152, 219, 0.05);
+    font-weight: 600;
+}
+
+.source-option:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.2);
+}
+
+
+/* =============================================================================
+   UPLOAD SECTION
+   ============================================================================= */
+
+.upload-info {
+    background: var(--bg-light);
+    padding: 1.5rem;
+    border-radius: var(--border-radius);
+    margin-bottom: 1.5rem;
+}
+
+.upload-info h3 {
+    color: var(--text-dark);
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+}
+
+.upload-info ul {
+    margin-left: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.upload-info li {
+    margin-bottom: 0.5rem;
+    color: var(--text-dark);
+}
+
+.example-code {
+    background: var(--bg-white);
+    padding: 1rem;
+    border-radius: var(--border-radius);
+    border-left: 4px solid var(--info-color);
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    overflow-x: auto;
+}
+
+.upload-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem;
+    border: 2px dashed var(--primary-color);
+    border-radius: var(--border-radius);
+    background: rgba(52, 152, 219, 0.02);
+    margin-bottom: 1.5rem;
+}
+
+.file-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--bg-light);
+    border-radius: var(--border-radius);
+    width: 100%;
+    max-width: 500px;
+}
+
+.file-info span {
+    flex: 1;
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.metadata-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.meta-item {
+    display: flex;
+    flex-direction: column;
+    padding: 0.75rem;
+    background: var(--bg-light);
+    border-radius: var(--border-radius);
+}
+
+.meta-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+}
+
+.meta-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.validation-messages {
+    margin: 1.5rem 0;
+}
+
+.validation-success {
+    padding: 1rem;
+    background: rgba(39, 174, 96, 0.1);
+    border-left: 4px solid var(--success-color);
+    border-radius: var(--border-radius);
+    color: var(--success-color);
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+.validation-error {
+    padding: 1rem;
+    background: rgba(231, 76, 60, 0.1);
+    border-left: 4px solid var(--error-color);
+    border-radius: var(--border-radius);
+    color: var(--error-color);
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+
+/* =============================================================================
+   CONTROLS
+   ============================================================================= */
+
+.controls-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.control-group label {
+    font-weight: 600;
+    color: var(--text-dark);
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.control-group input,
+.control-group select {
+    padding: 0.75rem;
+    border: 2px solid var(--bg-light);
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    transition: var(--transition);
+}
+
+.control-group input:focus,
+.control-group select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+
+/* =============================================================================
+   BUTTONS
+   ============================================================================= */
+
+.btn-primary,
+.btn-secondary {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    width: 100%;
+}
+
+.btn-primary {
+    background: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #2980b9;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+
+.btn-secondary {
+    background: var(--secondary-color);
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #8e44ad;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+}
+
+.btn-primary:active,
+.btn-secondary:active {
+    transform: translateY(0);
+}
+
+
+/* =============================================================================
+   LOADING INDICATOR
+   ============================================================================= */
+
+.loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--info-color);
+    color: white;
+    border-radius: var(--border-radius);
+    margin-top: 1rem;
+}
+
+.loading.hidden {
+    display: none;
+}
+
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+
+/* =============================================================================
+   PLOTS
+   ============================================================================= */
+
+.plot-container {
+    width: 100%;
+    height: 400px;
+    margin: 1rem 0;
+    border: 1px solid var(--bg-light);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+}
+
+
+/* =============================================================================
+   STATS
+   ============================================================================= */
+
+.stats-box {
+    background: var(--bg-light);
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    margin-top: 1rem;
+}
+
+.stats-box h3 {
+    color: var(--text-dark);
+    margin-bottom: 1rem;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    padding: 0.75rem;
+    background: white;
+    border-radius: var(--border-radius);
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+}
+
+.stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+
+/* =============================================================================
+   RESULTS
+   ============================================================================= */
+
+.results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.result-item h3 {
+    color: var(--text-dark);
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+}
+
+
+/* =============================================================================
+   PARAMETERS TABLE
+   ============================================================================= */
+
+.params-table {
+    margin: 2rem 0;
+}
+
+.params-table h3 {
+    color: var(--text-dark);
+    margin-bottom: 1rem;
+}
+
+#params-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+}
+
+#params-table thead {
+    background: var(--primary-color);
+    color: white;
+}
+
+#params-table th,
+#params-table td {
+    padding: 1rem;
+    text-align: left;
+}
+
+#params-table tbody tr:nth-child(even) {
+    background: var(--bg-light);
+}
+
+#params-table tbody tr:hover {
+    background: #d5dbdb;
+}
+
+#params-table td.value {
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+
+/* =============================================================================
+   VALIDATION
+   ============================================================================= */
+
+.validation-panel {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background: var(--bg-light);
+    border-radius: var(--border-radius);
+}
+
+.validation-panel h3 {
+    margin-bottom: 1rem;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+.badge-success {
+    background: var(--success-color);
+    color: white;
+}
+
+.badge-error {
+    background: var(--error-color);
+    color: white;
+}
+
+.warnings-list {
+    margin: 1rem 0;
+}
+
+.warning {
+    padding: 0.75rem;
+    border-radius: var(--border-radius);
+    margin-bottom: 0.5rem;
+    border-left: 4px solid;
+}
+
+.warning-error {
+    background: #fadbd8;
+    border-color: var(--error-color);
+    color: #c0392b;
+}
+
+.warning-warning {
+    background: #fef5e7;
+    border-color: var(--warning-color);
+    color: #d68910;
+}
+
+.warning-info {
+    background: #d6eaf8;
+    border-color: var(--info-color);
+    color: #117a65;
+}
+
+.no-warnings {
+    color: var(--success-color);
+    font-weight: 600;
+}
+
+.phys-params {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: white;
+    border-radius: var(--border-radius);
+}
+
+.phys-params h4 {
+    margin-bottom: 1rem;
+    color: var(--text-dark);
+}
+
+.phys-params table {
+    width: 100%;
+}
+
+.phys-params td {
+    padding: 0.5rem;
+}
+
+.phys-params td:first-child {
+    color: var(--text-muted);
+    width: 40%;
+}
+
+.phys-params td strong {
+    color: var(--primary-color);
+}
+
+.planet-class {
+    background: var(--secondary-color);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.9rem;
+}
+
+
+/* =============================================================================
+   INFO CARDS
+   ============================================================================= */
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.info-card {
+    padding: 1.5rem;
+    background: var(--bg-light);
+    border-radius: var(--border-radius);
+    border-left: 4px solid var(--primary-color);
+}
+
+.info-card h3 {
+    color: var(--text-dark);
+    margin-bottom: 1rem;
+}
+
+.info-card p,
+.info-card ul {
+    color: var(--text-dark);
+    line-height: 1.6;
+}
+
+.info-card ul {
+    margin-left: 1.5rem;
+    margin-top: 0.5rem;
+}
+
+.info-card li {
+    margin-bottom: 0.5rem;
+}
+
+.info-card strong {
+    color: var(--primary-color);
+}
+
+
+/* =============================================================================
+   UTILITY CLASSES
+   ============================================================================= */
+
+.hidden {
+    display: none !important;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-muted {
+    color: var(--text-muted);
+}
+
+
+/* =============================================================================
+   EPHEMERIS SECTION
+   ============================================================================= */
+
+.ephemeris-panel {
+    background: var(--bg-white);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    padding: 2rem;
+    margin-bottom: 2rem;
+}
+
+.ephemeris-panel h2 {
+    color: var(--text-dark);
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--secondary-color);
+}
+
+.ephemeris-actions {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.ephemeris-actions button {
+    flex: 1;
+}
+
+.ephemeris-equation {
+    text-align: center;
+    padding: 1.5rem;
+    background: var(--bg-light);
+    border-radius: var(--border-radius);
+    margin: 1rem 0;
+}
+
+.ephemeris-equation p {
+    font-size: 1.5rem;
+    color: var(--primary-color);
+}
+
+.ephemeris-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.eph-item {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+    background: white;
+    border-radius: var(--border-radius);
+    border-left: 4px solid var(--secondary-color);
+}
+
+.eph-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+}
+
+.eph-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--secondary-color);
+}
+
+.table-container {
+    overflow-x: auto;
+    margin: 1rem 0;
+}
+
+#transits-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+}
+
+#transits-table thead {
+    background: var(--secondary-color);
+    color: white;
+}
+
+#transits-table th,
+#transits-table td {
+    padding: 0.75rem;
+    text-align: center;
+}
+
+#transits-table tbody tr:nth-child(even) {
+    background: var(--bg-light);
+}
+
+#transits-table tbody tr:hover {
+    background: #d5dbdb;
+}
+
+#transits-table .invalid-transit {
+    opacity: 0.5;
+    background: #fadbd8;
+}
+
+#transits-table .invalid-transit:hover {
+    background: #f5b7b1;
+}
+
+
+/* =============================================================================
+   RESPONSIVE
+   ============================================================================= */
+
+@media (max-width: 768px) {
+    .controls-grid,
+    .results-grid,
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .plot-container {
+        height: 300px;
+    }
+    
+    .controls-panel,
+    .plot-panel,
+    .bls-panel,
+    .results-panel,
+    .info-panel {
+        padding: 1rem;
+    }
+    
+    .ephemeris-actions {
+        flex-direction: column;
+    }
+    
+    .ephemeris-grid {
+        grid-template-columns: 1fr;
+    }
+}

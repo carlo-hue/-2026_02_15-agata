@@ -1,0 +1,81 @@
+﻿contesto;catalogo;attributi;reference;commento;fonte;condizione d’uso;chiave_match
+identificativi;IV/38/tic;TIC;;“solo se c’è” (solo per stelle molto intense);VizieR;solo se disponibile;RA/DEC cone
+identificativi;I/255/out;GSC;;;VizieR;preferibile se presente;RA/DEC cone
+identificativi;I/271/out;GSC2.2;;“va messo solo se non c’è GSC”;VizieR;fallback se manca GSC;RA/DEC cone
+identificativi;I/322A/out;UCAC4;;“inserire sempre”;VizieR;sempre;RA/DEC cone
+identificativi;I/252/out;USNO-A2.0;;“inserire sempre”;VizieR;sempre;RA/DEC cone
+identificativi;I/284/out;USNO-B1.0;;“inserire sempre”;VizieR;sempre;RA/DEC cone
+identificativi;II/246/out;_2MASS;;“inserire sempre, ATTENZIONE: con la J davanti”;VizieR;sempre (formattare con prefisso J);RA/DEC cone
+identificativi;I/345/gaia2;Source;;;VizieR;sempre;RA/DEC cone
+identificativi;I/355/gaiadr3;Source;;;VizieR;sempre;RA/DEC cone
+identificativi;I/305/out;GSC2.3;;;VizieR;opzionale / se disponibile;RA/DEC cone
+identificativi;I/239/tyc_main;TYC;;;VizieR;opzionale;RA/DEC cone
+identificativi;I/146/ppm1;PPM;;;VizieR;opzionale;RA/DEC cone
+identificativi;J/ApJ/833/119/distallw;HIP;;;VizieR;opzionale;RA/DEC cone
+identificativi;V/15/catalog;HD;;;VizieR;opzionale;RA/DEC cone
+identificativi;V/15/catalog;SAO;;;VizieR;opzionale;RA/DEC cone
+identificativi;I/61B/agk3;BD;;;VizieR;opzionale;RA/DEC cone
+parametri_fisici;J/MNRAS/522/29/table2;TIC;"Green, M. J.; Maoz, D.; Mazeh, T.; et al., 2023…; 2023MNRAS.522…29G";;VizieR;se presente;RA/DEC cone
+parametri_fisici;J/MNRAS/522/29/table2;Porb;"Green, M. J.; Maoz, D.; Mazeh, T.; et al., 2023…; 2023MNRAS.522…29G";;VizieR;se presente;RA/DEC cone
+parametri_fisici;IV/39/tic82;Dist;"TESS Input Catalog v8.2 (Paegert+, 2021); 2021arXiv210804778P";;VizieR;se presente;RA/DEC cone
+parametri_fisici;IV/39/tic82;Mass;"TESS Input Catalog v8.2 (Paegert+, 2021); 2021arXiv210804778P";;VizieR;se presente;RA/DEC cone
+parametri_fisici;IV/39/tic82;Rad;"TESS Input Catalog v8.2 (Paegert+, 2021); 2021arXiv210804778P";;VizieR;se presente;RA/DEC cone
+parametri_fisici;IV/39/tic82;Teff;"TESS Input Catalog v8.2 (Paegert+, 2021); 2021arXiv210804778P";;VizieR;se presente;RA/DEC cone
+parametri_fisici;I/354/starhorse2021;dist50;"StarHorse2, Gaia EDR3 distances (Anders+, 2022); 2022yCat.1354…0A";;VizieR;se presente;RA/DEC cone
+parametri_fisici;I/354/starhorse2021;teff50;"StarHorse2, Gaia EDR3 distances (Anders+, 2022); 2022yCat.1354…0A";;VizieR;se presente;RA/DEC cone
+parametri_fisici;I/354/starhorse2021;mass50;"StarHorse2, Gaia EDR3 distances (Anders+, 2022); 2022yCat.1354…0A";;VizieR;se presente;RA/DEC cone
+parametri_fisici;I/355/paramp;GMAG;;;VizieR;se presente;RA/DEC cone
+parametri_fisici;I/355/paramp;Mass-Flame;;;VizieR;se presente;RA/DEC cone
+parametri_fisici;I/355/paramp;Rad;;;VizieR;se presente;RA/DEC cone
+parametri_fisici;I/355/paramp;Dist;;;VizieR;se presente;RA/DEC cone
+parametri_fisici;I/355/paramp;Teff;;;VizieR;se presente;RA/DEC cone
+tipo_spettrale;VI/135/table15;Type;2010PASP..122.1437P;“NON UTILIZZARE QUESTO CATALOGO” (nota esplicita in capture);VizieR;da escludere;RA/DEC cone
+tipo_spettrale;J/ApJS/266/4;SpT;2023ApJS..266…4L;;VizieR;se presente;RA/DEC cone
+tipo_spettrale;I/355/paramp;SpType-FLS;;;VizieR;se presente;RA/DEC cone
+tipo_spettrale;III/51B/vol2;SpType;1978MM…CO2….0H;;VizieR;se presente;RA/DEC cone
+tipo_spettrale;I/146/ppm1;Sp;2012AstL…38..331A;;VizieR;se presente;RA/DEC cone
+tipo_spettrale;I/131A/sao;SpType;SAO Star Catalog J2000…;;VizieR;se presente;RA/DEC cone
+tipo_spettrale;I/61B/agk3;Sp;AGK3… (Dieckvoss & Heckmann, 1975…);;VizieR;se presente;RA/DEC cone
+tipo_spettrale;I/238A/picat;MK;;;VizieR;se presente;RA/DEC cone
+tipo_spettrale;I/198/catalog;Sp;;;VizieR;se presente;RA/DEC cone
+tipo_spettrale;III/231/catalog;SpType;;;VizieR;se presente;RA/DEC cone
+tipo_spettrale;J/AJ/163/152/table1;SpType;;;VizieR;se presente;RA/DEC cone
+tipo_spettrale;V/15/catalog;Sp;;;VizieR;se presente;RA/DEC cone
+tipo_spettrale;I/280B/ascc;SpType;;;VizieR;se presente;RA/DEC cone
+tipo_spettrale;V/156/dr7lrs;subClass;2022yCat.5156…0L;;VizieR;se presente;RA/DEC cone
+magnitudine;I/108/cpd;mag;Cape Photographic Durchmusterung (Gill+ 1895-1900);;VizieR;se presente;RA/DEC cone
+magnitudine;I/114/cd;mag;Cordoba Durchmusterung (Thome 1892-1932);;VizieR;se presente;RA/DEC cone
+magnitudine;IV/39/tic82;Tmag;TIC v8.2 (Paegert+, 2021) 2021arXiv210804778P;;VizieR;se presente;RA/DEC cone
+magnitudine;I/355/paramp;GMAG;;;VizieR;se presente;RA/DEC cone
+magnitudine;I/355/gaiadr3;BP-RP;Gaia DR3 Part 1 Main source… 2022yCat.1355…0G;;VizieR;se presente;RA/DEC cone
+magnitudine;I/355/gaiadr3;Gmag;Gaia DR3 Part 1 Main source… 2022yCat.1355…0G;;VizieR;se presente;RA/DEC cone
+magnitudine;II/264/asas3;Vmax;ASAS Variable Stars… 2002AcA…52..397P;;VizieR;se presente;RA/DEC cone
+magnitudine;I/197A/tic;Vmag;"Tycho Input Catalogue… (Egret+ 1992); 1992A&A…258..217E";;VizieR;se presente;RA/DEC cone
+magnitudine;I/196/main;Vmag;"Hipparcos Input Catalogue v2 (Turon+ 1993); 1993BICDS..43…5T";;VizieR;se presente;RA/DEC cone
+variabilita_nota;I/357/acc9;Per;"Non-single stars (Gaia Collaboration, 2022); 2022yCat.1357…0G";;VizieR;se presente;RA/DEC cone
+variabilita_nota;I/357/acc7;Per;"Non-single stars (Gaia Collaboration, 2022); 2022yCat.1357…0G";;VizieR;se presente;RA/DEC cone
+variabilita_nota;I/357/tboasb1c;Per;"Non-single stars (Gaia Collaboration, 2022); 2022yCat.1357…0G";;VizieR;se presente;RA/DEC cone
+variabilita_nota;I/357/tbooc;Per;"Non-single stars (Gaia Collaboration, 2022); 2022yCat.1357…0G";;VizieR;se presente;RA/DEC cone
+variabilita_nota;I/357/tboeb;Per;"Non-single stars (Gaia Collaboration, 2022); 2022yCat.1357…0G";;VizieR;se presente;RA/DEC cone
+variabilita_nota;I/357/tbosb1;Per;"Non-single stars (Gaia Collaboration, 2022); 2022yCat.1357…0G";;VizieR;se presente;RA/DEC cone
+variabilita_nota;B/vsx/vsx;Name;AAVSO VSX (Watson+, 2006-);;VizieR;se presente;RA/DEC cone
+variabilita_nota;J/ApJS/268/4/table3;Pvar;"Fetherolf+, 2023; 2023ApJS..268…4F";;VizieR;se presente;RA/DEC cone
+variabilita_nota;J/ApJS/268/4/table2;P2;"Fetherolf+, 2023; 2023ApJS..268…4F";;VizieR;se presente;RA/DEC cone
+variabilita_nota;J/ApJS/268/4/table2;P1;"Fetherolf+, 2023; 2023ApJS..268…4F";;VizieR;se presente;RA/DEC cone
+variabilita_nota;J/ApJS/268/4/table1;Pvar;"Fetherolf+, 2023; 2023ApJS..268…4F";;VizieR;se presente;RA/DEC cone
+variabilita_nota;I/358/vmsosc;AmpGFreq?;Gaia DR3 Part 4 Variability… 2022yCat.1358…0G;;VizieR;se presente;RA/DEC cone
+variabilita_nota;J/ApJ/919/131/table1;TIC;"Hon+, 2021; 2021ApJ…919..131H";;VizieR;se presente;RA/DEC cone
+variabilita_nota;II/366/catalog;Gaia;"Jayasinghe+, 2018-2020; 2018MNRAS.477.3145J";;VizieR;se presente;RA/DEC cone
+variabilita_nota;I/358/vmsosc;Freq1;Gaia DR3 Part 4 Variability… 2022yCat.1358…0G;;VizieR;se presente;RA/DEC cone
+variabilita_nota;I/358/vst;Amp;Gaia DR3 Part 4 Variability… 2022yCat.1358…0G;;VizieR;se presente;RA/DEC cone
+variabilita_nota;I/358/veb;Freq;Gaia DR3 Part 4 Variability… 2022yCat.1358…0G;;VizieR;se presente;RA/DEC cone
+variabilita_nota;I/358/vclassre;Class;Gaia DR3 Part 4 Variability… 2022yCat.1358…0G;;VizieR;se presente;RA/DEC cone
+variabilita_nota;I/358/varisum;VCR;Gaia DR3 Part 4 Variability… 2022yCat.1358…0G;;VizieR;se presente;RA/DEC cone
+variabilita_nota;B/vsx/vsx;min;AAVSO VSX (Watson+, 2006-);;VizieR;se presente;RA/DEC cone
+variabilita_nota;B/vsx/vsx;max;AAVSO VSX (Watson+, 2006-);;VizieR;se presente;RA/DEC cone
+variabilita_nota;B/vsx/vsx;Period;AAVSO VSX (Watson+, 2006-);;VizieR;se presente;RA/DEC cone
+variabilita_nota;B/vsx/vsx;Type;AAVSO VSX (Watson+, 2006-);;VizieR;se presente;RA/DEC cone
+variabilita_nota;J/AJ/155/39/table6;Prot;"Oelkers+, 2018; 2018AJ…155…39O";;VizieR;se presente;RA/DEC cone
+variabilita_nota;J/AJ/155/39/Variables;TIC;"Oelkers+, 2018; 2018AJ…155…39O";;VizieR;se presente;RA/DEC cone
+variabilita_nota;J/MNRAS/522/29/table3;TIC;"Green+, 2023; 2023MNRAS.522…29G";;VizieR;se presente;RA/DEC cone
+variabilita_nota;J/A+A/669/A67/catalog;TIC;"Hatt+, 2023; 2023A&A…669A..67H";;VizieR;se presente;RA/DEC cone

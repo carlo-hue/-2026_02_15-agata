@@ -1,0 +1,629 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Stella {{ gaia_id }} - AGATA Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item">
+                        <a href="{{ url_for('admin.stars_catalog_page') }}">Catalogo Stelle</a>
+                    </li>
+                    <li class="breadcrumb-item active">{{ gaia_id }}</li>
+                </ol>
+            </nav>
+            <h1 class="h3 mb-0">
+                Gaia DR3 <code>{{ gaia_id }}</code>
+            </h1>
+        </div>
+        <div class="d-flex gap-2">
+            <!-- Nota: Editor richiede progetto assegnato. Usa "Crea Progetto" sotto per aprire in editor -->
+            <a href="https://simbad.cds.unistra.fr/simbad/sim-id?Ident=Gaia+DR3+{{ gaia_id }}"
+               target="_blank" class="btn btn-outline-secondary">
+                <i class="bi bi-box-arrow-up-right me-2"></i>SIMBAD
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Info e Statistiche -->
+        <div class="col-lg-4">
+            <!-- Statistiche Generali -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-bar-chart me-2"></i>Statistiche
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center mb-3">
+                        <div class="col-6">
+                            <h2 class="mb-0 text-primary">{{ total_points }}</h2>
+                            <small class="text-muted">Punti Totali</small>
+                        </div>
+                        <div class="col-6">
+                            <h2 class="mb-0 text-secondary">{{ catalogs|length }}</h2>
+                            <small class="text-muted">Cataloghi</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Assegnazioni (visibile a superuser e admin) -->
+            {% if assignments or is_superuser %}
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-share me-2"></i>Assegnazioni
+                        {% if assignments %}
+                        <span class="badge bg-info ms-2">{{ assignments|length }}</span>
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if assignments %}
+                        {% for assignment in assignments %}
+                        <div class="{% if not loop.last %}mb-3 pb-3 border-bottom{% endif %}">
+                            <div class="d-flex align-items-start justify-content-between">
+                                <div>
+                                    <span class="badge bg-info">{{ assignment.association.name }}</span>
+                                    {% if assignment.project_id %}
+                                    <span class="badge bg-success ms-1">Ha progetto</span>
+                                    {% else %}
+                                    <span class="badge bg-warning text-dark ms-1">Senza progetto</span>
+                                    {% endif %}
+                                    <br>
+                                    <small class="text-muted">
+                                        Assegnata {{ assignment.assigned_at.strftime('%d/%m/%Y') }}
+                                        {% if assignment.assigned_by_user %}
+                                        da {{ assignment.assigned_by_user.name }}
+                                        {% endif %}
+                                    </small>
+                                    {% if assignment.notes %}
+                                    <br><small class="text-muted fst-italic">{{ assignment.notes }}</small>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    {% if is_superuser and not assignment.project_id %}
+                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                            onclick="removeAssignment({{ assignment.id }}, '{{ assignment.association.name }}')"
+                                            title="Rimuovi assegnazione">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <p class="text-muted mb-0">Nessuna assegnazione per questa stella.</p>
+                    {% endif %}
+
+                    {% if is_superuser and associations %}
+                    <hr class="my-3">
+                    <h6 class="mb-3">Assegna a nuova associazione</h6>
+                    <form id="assignStarForm">
+                        <div class="mb-3">
+                            <label class="form-label">Associazione</label>
+                            <select class="form-select" name="association_id" required>
+                                <option value="">Seleziona...</option>
+                                {% for assoc in associations %}
+                                <option value="{{ assoc.id }}">{{ assoc.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Note (opzionale)</label>
+                            <input type="text" class="form-control" name="notes"
+                                   placeholder="Note sull'assegnazione">
+                        </div>
+                        <button type="submit" class="btn btn-info w-100" id="assignStarBtn">
+                            <i class="bi bi-share me-2"></i>Assegna Stella
+                        </button>
+                    </form>
+                    {% elif is_superuser and not associations %}
+                    <hr class="my-3">
+                    <div class="alert alert-info mb-0">
+                        <small>Stella già assegnata a tutte le associazioni disponibili.</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Azione Admin: Crea Progetto da Assegnazione -->
+            {% if can_create_project and my_assignment %}
+            <div class="card mt-3 border-warning">
+                <div class="card-header bg-warning">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-plus-circle me-2"></i>Crea Progetto
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Questa stella è assegnata alla tua associazione. Puoi creare un progetto
+                        per renderla disponibile agli analyst.
+                    </p>
+                    <form id="createProjectFromAssignmentForm">
+                        <div class="mb-3">
+                            <label class="form-label">Titolo (opzionale)</label>
+                            <input type="text" class="form-control" name="title"
+                                   placeholder="Titolo progetto">
+                        </div>
+                        <button type="submit" class="btn btn-warning w-100" id="createProjectFromAssignmentBtn">
+                            <i class="bi bi-plus-circle me-2"></i>Crea Progetto
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Progetti Attivi -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-folder me-2"></i>Progetti Attivi
+                        {% if active_projects %}
+                        <span class="badge bg-success ms-2">{{ active_projects|length }}</span>
+                        {% else %}
+                        <span class="badge bg-secondary ms-2">0</span>
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- DEBUG: active_projects = {{ active_projects|length if active_projects else 'vuota' }} -->
+                    {% if active_projects %}
+                        {% for project in active_projects %}
+                        <div class="{% if not loop.last %}mb-3 pb-3 border-bottom{% endif %}">
+                            <div class="d-flex align-items-start justify-content-between">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-check-circle text-success fs-4 me-3"></i>
+                                    <div>
+                                        <h6 class="mb-1">{{ project.project_code }}</h6>
+                                        <small class="text-muted">{{ project.title or 'Senza titolo' }}</small>
+                                        <br>
+                                        <span class="badge bg-info">{{ project.association.name }}</span>
+                                        <span class="badge bg-secondary">{{ project.state }}</span>
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-1">
+                                    {% if project.state != 'incoming' and project.state != 'cancelled' %}
+                                    <a href="{{ url_for('variable_stars.index') }}?project_id={{ project.id }}"
+                                       class="btn btn-sm btn-outline-info" target="_blank"
+                                       title="Apri in editor">
+                                        <i class="bi bi-graph-up"></i>
+                                    </a>
+                                    {% endif %}
+                                    <a href="{{ url_for('admin.project_detail', project_id=project.id) }}"
+                                       class="btn btn-sm btn-outline-success"
+                                       title="Dettagli progetto">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <p class="text-muted mb-0">Nessun progetto attivo per questa stella.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Import Associato -->
+            {% if import_record %}
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-cloud-download me-2"></i>Import
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-2">
+                        <dt class="col-5">ID Import</dt>
+                        <dd class="col-7">
+                            <a href="{{ url_for('admin.external_catalog_detail', import_id=import_record.id) }}">
+                                #{{ import_record.id }}
+                            </a>
+                        </dd>
+                        <dt class="col-5">Stato</dt>
+                        <dd class="col-7">
+                            {% if import_record.state == 'completed' %}
+                            <span class="badge bg-success">Completato</span>
+                            {% elif import_record.state == 'preview' %}
+                            <span class="badge bg-info">Preview</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ import_record.state }}</span>
+                            {% endif %}
+                        </dd>
+                        <dt class="col-5">Data</dt>
+                        <dd class="col-7">
+                            <small>{{ import_record.created_at.strftime('%d/%m/%Y %H:%M') }}</small>
+                        </dd>
+                    </dl>
+
+                    <!-- Note Import -->
+                    <div class="border-top pt-2 mt-2">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <small class="text-muted fw-bold">Note Import</small>
+                            <button type="button" class="btn btn-sm btn-link p-0" onclick="toggleImportNotesEdit()">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                        </div>
+                        <div id="importNotesDisplay">
+                            {% if import_record.notes %}
+                            <small style="white-space: pre-wrap;">{{ import_record.notes }}</small>
+                            {% else %}
+                            <small class="text-muted fst-italic">Nessuna nota</small>
+                            {% endif %}
+                        </div>
+                        <div id="importNotesEditForm" style="display: none;">
+                            <textarea class="form-control form-control-sm mb-2" id="importNotesInput" rows="2"
+                                      placeholder="Note sull'importazione...">{{ import_record.notes or '' }}</textarea>
+                            <div class="d-flex gap-1">
+                                <button type="button" class="btn btn-sm btn-primary" onclick="saveImportNotes({{ import_record.id }})">
+                                    <i class="bi bi-check"></i> Salva
+                                </button>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="cancelImportNotesEdit()">
+                                    Annulla
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Progetti Cancellati (storico) -->
+            {% if cancelled_projects %}
+            <div class="card mt-3 border-secondary">
+                <div class="card-header bg-light">
+                    <h6 class="card-title mb-0">
+                        <i class="bi bi-archive me-2"></i>Storico Progetti ({{ cancelled_projects|length }})
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0 small">
+                        {% for proj in cancelled_projects %}
+                        <li class="mb-2">
+                            <span class="badge bg-secondary">{{ proj.project_code }}</span>
+                            <span class="text-muted">cancellato</span>
+                            {% if proj.cancelled_at %}
+                            <span class="text-muted">il {{ proj.cancelled_at.strftime('%d/%m/%Y') }}</span>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Dati per Catalogo -->
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-database me-2"></i>Dati per Catalogo
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        {% if is_superuser %}
+                                        <input type="checkbox" class="form-check-input" id="selectAll">
+                                        {% endif %}
+                                    </th>
+                                    <th>Catalogo</th>
+                                    {% if is_superuser %}
+                                    <th>Proprietario</th>
+                                    {% endif %}
+                                    <th class="text-center">Punti</th>
+                                    <th>Range JD</th>
+                                    <th>Range Mag</th>
+                                    <th>Mag Media</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cat in catalogs %}
+                                <tr>
+                                    <td>
+                                        {% if is_superuser %}
+                                        <input type="checkbox" class="form-check-input catalog-check"
+                                               value="{{ cat.name }}">
+                                        {% endif %}
+                                    </td>
+                                    <td><strong>{{ cat.name }}</strong></td>
+                                    {% if is_superuser %}
+                                    <td>
+                                        {% if cat.owner_association %}
+                                        <small>
+                                            {% if cat.owner_association_id %}
+                                            <span class="badge bg-info">{{ cat.owner_association }}</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary">{{ cat.owner_association }}</span>
+                                            {% endif %}
+                                        </small>
+                                        {% else %}
+                                        <small class="text-muted">-</small>
+                                        {% endif %}
+                                    </td>
+                                    {% endif %}
+                                    <td class="text-center">
+                                        <span class="badge bg-primary">{{ cat.points }}</span>
+                                    </td>
+                                    <td>
+                                        <small>
+                                            {{ "%.2f"|format(cat.min_hjd) }} -<br>
+                                            {{ "%.2f"|format(cat.max_hjd) }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        {{ "%.3f"|format(cat.min_mag) }} -
+                                        {{ "%.3f"|format(cat.max_mag) }}
+                                    </td>
+                                    <td>{{ "%.3f"|format(cat.avg_mag) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Azioni Dati (solo superuser) -->
+            {% if is_superuser %}
+            <div class="card mt-3 border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-exclamation-triangle me-2"></i>Gestione Dati
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        Cancella i dati fotometrici selezionati o tutti i dati di questa stella.
+                    </p>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-outline-danger" onclick="deleteSelected()">
+                            <i class="bi bi-trash me-2"></i>Cancella Selezionati
+                        </button>
+                        <button type="button" class="btn btn-danger" onclick="deleteAll()">
+                            <i class="bi bi-trash-fill me-2"></i>Cancella Tutti i Dati
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Select all checkbox
+    const selectAll = document.getElementById('selectAll');
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            document.querySelectorAll('.catalog-check').forEach(cb => {
+                cb.checked = this.checked;
+            });
+        });
+    }
+
+    // Assign star form (superuser)
+    const assignStarForm = document.getElementById('assignStarForm');
+    if (assignStarForm) {
+        assignStarForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(assignStarForm);
+            const associationId = formData.get('association_id');
+            const notes = formData.get('notes');
+
+            if (!associationId) {
+                alert('Seleziona un\'associazione');
+                return;
+            }
+
+            const btn = document.getElementById('assignStarBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Assegnazione...';
+
+            try {
+                const response = await fetch('/agata/admin/api/stars-catalog/{{ gaia_id }}/assign', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        association_id: parseInt(associationId),
+                        notes: notes || null
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(result.message);
+                    location.reload();
+                } else {
+                    alert('Errore: ' + result.error);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-share me-2"></i>Assegna Stella';
+                }
+            } catch (error) {
+                alert('Errore: ' + error.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-share me-2"></i>Assegna Stella';
+            }
+        });
+    }
+
+    // Create project from assignment form (admin)
+    const createProjectFromAssignmentForm = document.getElementById('createProjectFromAssignmentForm');
+    if (createProjectFromAssignmentForm) {
+        createProjectFromAssignmentForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(createProjectFromAssignmentForm);
+            const title = formData.get('title');
+
+            const btn = document.getElementById('createProjectFromAssignmentBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creazione...';
+
+            try {
+                const response = await fetch('/agata/admin/api/stars-catalog/{{ gaia_id }}/create-project', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        title: title || null
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('Creato progetto ' + result.project_code);
+                    window.location.href = '/agata/admin/projects/' + result.project_id;
+                } else {
+                    alert('Errore: ' + result.error);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-plus-circle me-2"></i>Crea Progetto';
+                }
+            } catch (error) {
+                alert('Errore: ' + error.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-plus-circle me-2"></i>Crea Progetto';
+            }
+        });
+    }
+});
+
+function getSelectedCatalogs() {
+    const selected = [];
+    document.querySelectorAll('.catalog-check:checked').forEach(cb => {
+        selected.push(cb.value);
+    });
+    return selected;
+}
+
+async function deleteSelected() {
+    const catalogs = getSelectedCatalogs();
+    if (catalogs.length === 0) {
+        alert('Seleziona almeno un catalogo');
+        return;
+    }
+
+    if (!confirm(`Vuoi cancellare i dati di ${catalogs.length} catalogo/i?\n\n${catalogs.join(', ')}`)) return;
+
+    await deleteData(catalogs);
+}
+
+async function deleteAll() {
+    if (!confirm('ATTENZIONE: Questa operazione cancellerà TUTTI i dati fotometrici di questa stella.\n\nVuoi continuare?')) return;
+    if (!confirm('Sei SICURO? I dati verranno eliminati permanentemente.')) return;
+
+    await deleteData(null);
+}
+
+async function deleteData(catalogs) {
+    try {
+        const response = await fetch('/agata/admin/api/stars-catalog/{{ gaia_id }}/delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                catalogs: catalogs
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert('Cancellati ' + result.deleted_count + ' record.');
+            if (catalogs === null || result.deleted_count === {{ total_points }}) {
+                // Se cancellati tutti, torna alla lista
+                window.location.href = '{{ url_for("admin.stars_catalog_page") }}';
+            } else {
+                location.reload();
+            }
+        } else {
+            alert('Errore: ' + result.error);
+        }
+    } catch (error) {
+        alert('Errore: ' + error.message);
+    }
+}
+
+async function removeAssignment(assignmentId, associationName) {
+    if (!confirm(`Vuoi rimuovere l'assegnazione a ${associationName}?`)) return;
+
+    try {
+        const response = await fetch('/agata/admin/api/star-assignments/' + assignmentId, {
+            method: 'DELETE',
+            headers: {'Content-Type': 'application/json'}
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(result.message);
+            location.reload();
+        } else {
+            alert('Errore: ' + result.error);
+        }
+    } catch (error) {
+        alert('Errore: ' + error.message);
+    }
+}
+
+// Gestione note import
+function toggleImportNotesEdit() {
+    document.getElementById('importNotesDisplay').style.display = 'none';
+    document.getElementById('importNotesEditForm').style.display = 'block';
+    document.getElementById('importNotesInput').focus();
+}
+
+function cancelImportNotesEdit() {
+    document.getElementById('importNotesDisplay').style.display = 'block';
+    document.getElementById('importNotesEditForm').style.display = 'none';
+}
+
+async function saveImportNotes(importId) {
+    const notes = document.getElementById('importNotesInput').value;
+
+    try {
+        const response = await fetch(`/agata/admin/api/external-catalogs/${importId}/notes`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ notes: notes })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Aggiorna display
+            const display = document.getElementById('importNotesDisplay');
+            if (notes.trim()) {
+                display.innerHTML = `<small style="white-space: pre-wrap;">${escapeHtml(notes)}</small>`;
+            } else {
+                display.innerHTML = '<small class="text-muted fst-italic">Nessuna nota</small>';
+            }
+            cancelImportNotesEdit();
+        } else {
+            alert('Errore: ' + result.error);
+        }
+    } catch (error) {
+        alert('Errore: ' + error.message);
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

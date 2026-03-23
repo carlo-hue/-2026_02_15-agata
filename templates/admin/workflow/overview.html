@@ -1,0 +1,45 @@
+{% extends "admin/base.html" %}
+{% block title %}Workflow - AGATA Admin{% endblock %}
+{% block page_title %}Gestione Workflow{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-header bg-white">
+        <h6 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>Matrice Workflow: Stato × Associazione</h6>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>Associazione</th>
+                        {% for state in states %}
+                        <th class="text-center">{{ state }}</th>
+                        {% endfor %}
+                        <th class="text-center"><strong>Totale</strong></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for assoc in associations %}
+                    <tr>
+                        <td><strong>{{ assoc.name }}</strong></td>
+                        {% set row_total = 0 %}
+                        {% for state in states %}
+                        {% set count = matrix.get(assoc.id, {}).get(state, 0) %}
+                        <td class="text-center">
+                            {% if count > 0 %}
+                            <span class="badge bg-primary">{{ count }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        {% set row_total = row_total + count %}
+                        {% endfor %}
+                        <td class="text-center"><strong>{{ row_total }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

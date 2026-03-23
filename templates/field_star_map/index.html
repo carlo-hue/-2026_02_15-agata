@@ -1,0 +1,131 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AGATA - Field Star Map</title>
+
+    <link rel="stylesheet" href="{{ url_for('field_star_map.static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('field_star_map.static', filename='css/field_star_map.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+    <script src="{{ url_for('field_star_map.static', filename='js/plotly-2.30.0.min.js') }}"></script>
+    <script>
+        window.FIELD_STAR_MAP_API_BASE_URL = {{ api_base_url|tojson }};
+    </script>
+</head>
+<body>
+    <aside id="field-star-sidebar" class="module-sidebar">
+        <div class="module-sidebar-title">Moduli Principali</div>
+        <nav class="module-nav">
+            <a href="{{ url_for('admin.list_projects') }}" class="module-nav-link">
+                <i class="bi bi-wrench"></i>
+                Admin
+            </a>
+            <a href="{{ url_for('variable_stars.index') }}" class="module-nav-link">
+                <i class="bi bi-graph-up"></i>
+                Editor Stelle
+            </a>
+            <a href="{{ url_for('exoplanets.index') }}" class="module-nav-link">
+                <i class="bi bi-globe"></i>
+                Esopianeti
+            </a>
+            <a href="{{ url_for('field_star_map.index') }}" class="module-nav-link active">
+                <i class="bi bi-bullseye"></i>
+                Field Star Map
+            </a>
+        </nav>
+    </aside>
+
+    <div class="app-shell">
+        <header>
+            <h1>AGATA - Gaia Field Star Map</h1>
+            <nav>
+                <a href="/agata/variable-stars/">Stelle Variabili</a>
+                <a href="/agata/exoplanets/">Esopianeti</a>
+                <a href="{{ url_for('field_star_map.index') }}" class="active">Field Star Map</a>
+            </nav>
+        </header>
+
+        <main>
+            <section class="panel controls-panel">
+                <div class="controls-grid">
+                    <div class="control-group">
+                        <label for="sourceId">source_id</label>
+                        <input id="sourceId" type="text" value="5853498713190525696" maxlength="25">
+                    </div>
+                    <div class="control-group">
+                        <label for="halfSizeArcmin">half_size_arcmin</label>
+                        <input id="halfSizeArcmin" type="text" value="3.5" maxlength="5">
+                    </div>
+                    <div class="control-group">
+                        <label for="deltaMag">delta_mag</label>
+                        <input id="deltaMag" type="text" value="6" maxlength="3">
+                    </div>
+                    <div class="control-group">
+                        <label for="pixelScaleArcsec">raggio cerchio centrale</label>
+                        <input id="pixelScaleArcsec" type="text" value="21" maxlength="3">
+                    </div>
+                    <div class="control-group">
+                        <label for="overlayRadiiPixels">raggi cerchi (separati da virgola)</label>
+                        <input id="overlayRadiiPixels" type="text" value="1,2,3,5" maxlength="15">
+                    </div>
+                    <div class="control-group control-button">
+                        <button id="loadBtn" class="btn-primary" type="button">Load</button>
+                    </div>
+                    <div class="control-group control-checkbox">
+                        <label class="checkbox-label">
+                            <input id="showCircles" type="checkbox" checked>
+                            <span>Mostra cerchi concentrici (fotometria attorno al target)</span>
+                        </label>
+                    </div>
+                </div>
+                <div id="errorBox" class="error hidden"></div>
+            </section>
+
+            <section class="panel content-grid">
+                <div class="plot-panel">
+                    <div id="plot"></div>
+                </div>
+                <div class="table-panel">
+                    <div class="table-header-bar">
+                        <h2>Top contaminanti</h2>
+                        <button id="clearSelectionBtn" class="btn-secondary" type="button">Azzera selezione</button>
+                    </div>
+                    <p id="selectionNote" class="note hidden"></p>
+                    <div class="table-wrap">
+                        <table id="contaminantsTable">
+                            <thead>
+                                <tr>
+                                    <th><button type="button" data-sort="source_id" data-label="src id">src id</button></th>
+                                    <th><button type="button" data-sort="r_arcsec" data-label="r sec">r sec</button></th>
+                                    <th><button type="button" data-sort="r_arcmin" data-label="r min">r min</button></th>
+                                    <th><button type="button" data-sort="g_mag" data-label="G mag">G mag</button></th>
+                                    <th><button type="button" data-sort="delta_mag" data-label="delta mag">delta mag</button></th>
+                                    <th><button type="button" data-sort="flux_ratio" data-label="flux r">flux r</button></th>
+                                    <th><button type="button" data-sort="weighted_flux_ratio" data-label="PSF flux">PSF flux</button></th>
+                                    <th><button type="button" data-sort="period_days" data-label="Per">Per</button></th>
+                                    <th><button type="button" data-sort="var_type" data-label="var">var</button></th>
+                                </tr>
+                            </thead>
+                            <tbody id="contaminantsBody"></tbody>
+                        </table>
+                    </div>
+                    <p class="note">
+                        Top contaminanti = stelle nel campo quadrato con contributo relativo piu alto rispetto al target.
+                        Il ranking usa <code>PSF flux</code>: <code>flux_ratio</code> pesato con una
+                        approssimazione gaussiana della PSF TESS in funzione di <code>r_arcsec</code>.
+                    </p>
+                    <p class="note">
+                        La dimensione dei marker nel grafico cresce con <code>flux_ratio</code>, con limiti min/max.
+                    </p>
+                    <p id="metaInfo" class="meta"></p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('field_star_map.static', filename='js/field_star_map/main.js') }}"></script>
+</body>
+</html>
+

@@ -1,0 +1,49 @@
+{% extends "admin/base.html" %}
+{% block title %}Utenti - AGATA Admin{% endblock %}
+{% block page_title %}Gestione Utenti{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-header bg-white">
+        <h6 class="mb-0"><i class="bi bi-people me-2"></i>Utenti</h6>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover table-admin mb-0">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Email</th>
+                    <th>Ruolo</th>
+                    <th>Associazione</th>
+                    <th>Stato</th>
+                    <th>Ultimo Accesso</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td><strong>{{ user.full_name }}</strong></td>
+                    <td class="small">{{ user.email }}</td>
+                    <td><span class="badge {% if user.role == 'superuser' %}bg-danger{% elif user.role == 'admin' %}bg-warning{% else %}bg-secondary{% endif %}">{{ user.role }}</span></td>
+                    <td>{{ user.association.name if user.association else '-' }}</td>
+                    <td>
+                        {% if user.is_active %}
+                        <span class="badge bg-success">Attivo</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Sospeso</span>
+                        {% endif %}
+                    </td>
+                    <td class="small text-muted">{{ user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else 'Mai' }}</td>
+                    <td>
+                        <a href="{{ url_for('admin.user_detail', user_id=user.id) }}"
+                           class="btn btn-sm btn-outline-primary btn-action">
+                            Dettagli
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

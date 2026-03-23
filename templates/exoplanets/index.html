@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AGATA - Analisi Transiti Esopianeti</title>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('exoplanets.static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('exoplanets.static', filename='css/exoplanets.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+    <!-- Plotly per grafici interattivi -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+</head>
+<body>
+    <!-- Sidebar per navigazione moduli -->
+    <aside id="exoplanet-sidebar" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        width: 260px;
+        background: #1a1d29;
+        color: #fff;
+        overflow-y: auto;
+        z-index: 1000;
+        padding-top: 1.5rem;
+    ">
+        <div style="padding: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+            <h3 style="margin: 0; font-size: 0.9rem; font-weight: 600;">Moduli Principali</h3>
+        </div>
+        <nav style="padding: 0.75rem 0;">
+            <a href="{{ url_for('admin.list_projects') }}" style="
+                display: flex;
+                align-items: center;
+                padding: 0.65rem 1rem;
+                color: rgba(255,255,255,0.7);
+                text-decoration: none;
+                transition: all 0.2s;
+            " onmouseover="this.style.backgroundColor='rgba(255,255,255,0.05)'; this.style.color='#fff';" onmouseout="this.style.backgroundColor='transparent'; this.style.color='rgba(255,255,255,0.7)';">
+                <i class="bi bi-wrench" style="margin-right: 0.75rem; width: 20px;"></i>
+                Admin
+            </a>
+            <a href="{{ url_for('variable_stars.index') }}" style="
+                display: flex;
+                align-items: center;
+                padding: 0.65rem 1rem;
+                color: rgba(255,255,255,0.7);
+                text-decoration: none;
+                transition: all 0.2s;
+            " onmouseover="this.style.backgroundColor='rgba(255,255,255,0.05)'; this.style.color='#fff';" onmouseout="this.style.backgroundColor='transparent'; this.style.color='rgba(255,255,255,0.7)';">
+                <i class="bi bi-graph-up" style="margin-right: 0.75rem; width: 20px;"></i>
+                Editor Stelle
+            </a>
+            <a href="{{ url_for('exoplanets.index') }}" style="
+                display: flex;
+                align-items: center;
+                padding: 0.65rem 1rem;
+                color: #0d6efd;
+                text-decoration: none;
+                background: rgba(13, 110, 253, 0.15);
+                border-left: 3px solid #0d6efd;
+            ">
+                <i class="bi bi-globe" style="margin-right: 0.75rem; width: 20px;"></i>
+                Esopianeti
+            </a>
+        </nav>
+    </aside>
+
+    <!-- Main content wrapper -->
+    <div style="margin-left: 260px;">
+        <!-- Header -->
+        <header>
+            <div class="header-content">
+                <h1>🪐 AGATA - Analisi Transiti Esopianeti</h1>
+                <nav>
+                    <a href="/agata/variable-stars/">⭐ Stelle Variabili</a>
+                    <a href="/agata/exoplanets/" class="active">🪐 Esopianeti</a>
+                    <a href="/">🏠 Home</a>
+                </nav>
+            </div>
+        </header>
+    
+    <!-- Main Content -->
+    <main>
+        <!-- Pannello Selezione Sorgente Dati -->
+        <section class="data-source-panel">
+            <h2>📂 Sorgente Dati</h2>
+            
+            <div class="data-source-selector">
+                <label>
+                    <input type="radio" name="data-source" value="synthetic" checked>
+                    <span class="source-option">
+                        🧪 Dati Sintetici (Test)
+                    </span>
+                </label>
+                
+                <label>
+                    <input type="radio" name="data-source" value="upload">
+                    <span class="source-option">
+                        📁 Upload File Osservazioni
+                    </span>
+                </label>
+            </div>
+        </section>
+        
+        <!-- Pannello Upload File -->
+        <section class="upload-panel hidden" id="upload-panel">
+            <h2>📁 Carica Osservazioni</h2>
+            
+            <div class="upload-info">
+                <h3>Formati Supportati:</h3>
+                <ul>
+                    <li><strong>CSV/TXT:</strong> Colonne: JD, flux (o mag), errori (opzionali)</li>
+                    <li><strong>FITS:</strong> Tabelle binarie con colonne JD, FLUX</li>
+                    <li><strong>Separatori:</strong> Virgola, tab, spazio, punto-e-virgola</li>
+                </ul>
+                
+                <h3>Esempio CSV:</h3>
+                <pre class="example-code">2460001.5, 1.0000, 0.0010
+2460001.6, 0.9900, 0.0012
+2460001.7, 0.9850, 0.0011
+...</pre>
+            </div>
+            
+            <div class="upload-area">
+                <input type="file" id="file-input" accept=".csv,.txt,.dat,.asc,.fits,.fit" hidden>
+                <button id="btn-select-file" class="btn-primary">
+                    📂 Seleziona File
+                </button>
+                <div id="file-selected" class="file-info hidden">
+                    <span id="filename">-</span>
+                    <button id="btn-upload" class="btn-primary">
+                        📤 Carica Dati
+                    </button>
+                </div>
+            </div>
+            
+            <div id="upload-loading" class="loading hidden">
+                <div class="spinner"></div>
+                <span>Caricamento e parsing file...</span>
+            </div>
+            
+            <!-- Preview dati caricati -->
+            <div id="upload-results" class="hidden">
+                <h3>✅ Dati Caricati</h3>
+                
+                <div id="upload-metadata" class="metadata-grid">
+                    <!-- Popolato da JS -->
+                </div>
+                
+                <div id="upload-validation" class="validation-messages">
+                    <!-- Popolato da JS -->
+                </div>
+                
+                <div id="upload-preview-plot" class="plot-container"></div>
+            </div>
+        </section>
+        
+        <!-- Pannello Controlli (MODIFICATO: nascosto se upload) -->
+        <section class="controls-panel" id="synthetic-controls">
+            <h2>📊 Configurazione Analisi</h2>
+            
+            <div class="controls-grid">
+                <!-- Tipo Pianeta -->
+                <div class="control-group">
+                    <label for="planet-type">Tipo Pianeta:</label>
+                    <select id="planet-type">
+                        <option value="hot_jupiter" selected>🔥 Hot Jupiter (P~3d, Rp~1.2 Rjup)</option>
+                        <option value="neptune">🌀 Neptune (P~5d, Rp~4 Rearth)</option>
+                        <option value="super_earth">🌍 Super-Earth (P~10d, Rp~2 Rearth)</option>
+                        <option value="earth">🌎 Earth-like (P~365d, Rp~1 Rearth)</option>
+                    </select>
+                </div>
+                
+                <!-- Numero Transiti -->
+                <div class="control-group">
+                    <label for="n-transits">Numero Transiti:</label>
+                    <input type="number" id="n-transits" value="10" min="3" max="50">
+                </div>
+                
+                <!-- Seed -->
+                <div class="control-group">
+                    <label for="seed">Seed (riproducibilità):</label>
+                    <input type="number" id="seed" value="42" min="1">
+                </div>
+                
+                <!-- Pulsante Genera -->
+                <div class="control-group">
+                    <button id="btn-load" class="btn-primary">
+                        🚀 Genera Dati
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Progress indicator -->
+            <div id="loading" class="loading hidden">
+                <div class="spinner"></div>
+                <span>Generazione dati in corso...</span>
+            </div>
+        </section>
+        
+        <!-- Pannello Curva di Luce -->
+        <section class="plot-panel">
+            <h2>📈 Curva di Luce</h2>
+            <div id="plot-lightcurve" class="plot-container"></div>
+            <div id="lightcurve-stats" class="stats-box hidden"></div>
+        </section>
+        
+        <!-- Pannello BLS -->
+        <section class="bls-panel hidden" id="bls-panel">
+            <h2>🔍 Box Least Squares Detection</h2>
+            
+            <div class="controls-grid">
+                <div class="control-group">
+                    <label for="period-min">Periodo Min [giorni]:</label>
+                    <input type="number" id="period-min" value="0.5" step="0.1" min="0.1">
+                </div>
+                
+                <div class="control-group">
+                    <label for="period-max">Periodo Max [giorni]:</label>
+                    <input type="number" id="period-max" value="20" step="1" min="1">
+                </div>
+                
+                <div class="control-group">
+                    <button id="btn-bls" class="btn-primary">
+                        🔬 Esegui BLS
+                    </button>
+                </div>
+            </div>
+            
+            <div id="bls-loading" class="loading hidden">
+                <div class="spinner"></div>
+                <span>Calcolo BLS in corso (può richiedere 10-30 secondi)...</span>
+            </div>
+        </section>
+        
+        <!-- Pannello Risultati BLS -->
+        <section class="results-panel hidden" id="results-panel">
+            <h2>📊 Risultati Detection</h2>
+            
+            <div class="results-grid">
+                <!-- Periodogramma BLS -->
+                <div class="result-item">
+                    <h3>Periodogramma BLS</h3>
+                    <div id="plot-bls" class="plot-container"></div>
+                </div>
+                
+                <!-- Fase Foldato -->
+                <div class="result-item">
+                    <h3>Curva Foldato sul Periodo</h3>
+                    <div id="plot-folded" class="plot-container"></div>
+                </div>
+            </div>
+            
+            <!-- Tabella Parametri -->
+            <div class="params-table">
+                <h3>🔢 Parametri Rilevati</h3>
+                <table id="params-table">
+                    <thead>
+                        <tr>
+                            <th>Parametro</th>
+                            <th>Valore</th>
+                            <th>Unità</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Popolato da JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Validazione Fisica -->
+            <div id="validation-panel" class="validation-panel">
+                <h3>✅ Validazione Fisica</h3>
+                <div id="validation-content">
+                    <!-- Popolato dopo validazione -->
+                </div>
+                <button id="btn-validate" class="btn-secondary">
+                    🔬 Valida Parametri Fisici
+                </button>
+            </div>
+        </section>
+        
+        <!-- Pannello Info Teoriche -->
+        <section class="info-panel">
+            <h2>📚 Informazioni</h2>
+            <div class="info-grid">
+                <div class="info-card">
+                    <h3>🔍 Box Least Squares (BLS)</h3>
+                    <p>
+                        Algoritmo ottimizzato per rilevare segnali periodici non-sinusoidali 
+                        (transiti esopianeti). Cerca variazioni a forma di "box" nel flusso stellare.
+                    </p>
+                    <p><strong>Riferimento:</strong> Kovács et al. 2002, A&A 391, 369</p>
+                </div>
+                
+                <div class="info-card">
+                    <h3>📊 Metriche Rilevazione</h3>
+                    <ul>
+                        <li><strong>SDE (Signal Detection Efficiency):</strong> (power - ⟨power⟩) / σ(power)</li>
+                        <li><strong>SDE > 7:</strong> Candidato robusto</li>
+                        <li><strong>SNR (Signal-to-Noise):</strong> Rapporto segnale/rumore</li>
+                        <li><strong>SNR > 5:</strong> Detection significativa</li>
+                    </ul>
+                </div>
+                
+                <div class="info-card">
+                    <h3>🌍 Parametri Fisici</h3>
+                    <ul>
+                        <li><strong>Rp/R★:</strong> Rapporto raggi (da profondità = (Rp/R★)²)</li>
+                        <li><strong>a:</strong> Semiasse orbitale (Keplero III)</li>
+                        <li><strong>Teq:</strong> Temperatura equilibrio pianeta</li>
+                        <li><strong>Classe:</strong> Rocky / Super-Earth / Neptune / Jupiter</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Pannello Effemeridi e Export -->
+        <section class="ephemeris-panel hidden" id="ephemeris-panel">
+            <h2>📅 Effemeridi Transiti ed Export</h2>
+            
+            <div class="ephemeris-actions">
+                <button id="btn-ephemeris" class="btn-primary">
+                    📊 Calcola Effemeridi
+                </button>
+                
+                <button id="btn-export-exoclock" class="btn-secondary hidden">
+                    📥 Export ExoClock
+                </button>
+            </div>
+            
+            <div id="ephemeris-loading" class="loading hidden">
+                <div class="spinner"></div>
+                <span>Calcolo effemeridi transiti...</span>
+            </div>
+            
+            <!-- Risultati Effemeridi -->
+            <div id="ephemeris-results" class="hidden">
+                <h3>📈 Effemeridi Lineari</h3>
+                <div class="ephemeris-equation">
+                    <p><strong>T(E) = T₀ + E × P</strong></p>
+                </div>
+                
+                <div class="ephemeris-values" id="ephemeris-values">
+                    <!-- Popolato da JS -->
+                </div>
+                
+                <!-- Plot O-C -->
+                <h3>📉 Diagramma O-C (Observed - Calculated)</h3>
+                <div id="plot-oc" class="plot-container"></div>
+                
+                <!-- Tabella Transiti -->
+                <h3>🕐 Transiti Individuali</h3>
+                <div class="table-container">
+                    <table id="transits-table">
+                        <thead>
+                            <tr>
+                                <th>Epoca</th>
+                                <th>T<sub>mid</sub> [JD]</th>
+                                <th>Errore [min]</th>
+                                <th>O-C [min]</th>
+                                <th>SNR</th>
+                                <th>Valido</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Popolato da JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+        <!-- Footer -->
+        <footer>
+            <div class="footer-content">
+                <p>AGATA v2.0 - AstroGen Astronomy Tools A</p>
+                <p>Modulo Esopianeti | Algoritmi: BLS (Astropy), Validazione Fisica Completa</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- JavaScript -->
+    <script type="module" src="{{ url_for('exoplanets.static', filename='js/exoplanets/main.js') }}"></script>
+</body>
+</html>

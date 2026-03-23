@@ -1,0 +1,252 @@
+{% extends "admin/base.html" %}
+{% block title %}Associazioni - AGATA Admin{% endblock %}
+{% block page_title %}Gestione Associazioni{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-building me-2"></i>Associazioni</h6>
+        {% if current_user.role == 'superuser' %}
+        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createAssociationModal">
+            <i class="bi bi-plus"></i> Nuova Associazione
+        </button>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover table-admin mb-0">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Slug</th>
+                    <th>Tipo</th>
+                    <th>Progetti Attivi</th>
+                    <th>Utenti</th>
+                    <th>Slack</th>
+                    <th>Referente</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for assoc in associations %}
+                <tr>
+                    <td><strong>{{ assoc.name }}</strong></td>
+                    <td><code>{{ assoc.slug }}</code></td>
+                    <td><span class="badge bg-secondary">{{ assoc.type }}</span></td>
+                    <td><span class="badge bg-primary">{{ assoc.active_projects }}</span></td>
+                    <td>{{ assoc.total_users }}</td>
+                    <td>
+                        {% if assoc.slack_enabled %}
+                        <span class="badge bg-success" title="{{ assoc.slack_channels }} canali">{{ assoc.slack_channels }} ch</span>
+                        {% else %}
+                        <span class="badge bg-secondary" title="Integrazione disabilitata">OFF</span>
+                        {% endif %}
+                    </td>
+                    <td class="small">{{ assoc.referente_name or '-' }}</td>
+                    <td>
+                        <a href="{{ url_for('admin.association_detail', association_id=assoc.id) }}"
+                           class="btn btn-sm btn-outline-primary btn-action">
+                            Dettagli
+                        </a>
+                        {% if current_user.role == 'superuser' %}
+                        <button class="btn btn-sm btn-outline-danger btn-action ms-1"
+                                onclick="deleteAssociation({{ assoc.id }}, '{{ assoc.name }}')"
+                                title="Elimina associazione">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal: Crea Nuova Associazione -->
+{% if current_user.role == 'superuser' %}
+<div class="modal fade" id="createAssociationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus"></i> Crea Nuova Associazione</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createAssociationForm">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Nome Associazione *</label>
+                        <input type="text" class="form-control" id="name" name="name" required
+                               placeholder="es: Unione Astrofili Italiani">
+                        <small class="form-text text-muted">Nome completo dell'associazione</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="slug" class="form-label">Slug *</label>
+                        <input type="text" class="form-control" id="slug" name="slug" required
+                               placeholder="es: uai" pattern="[a-z0-9-]+">
+                        <small class="form-text text-muted">Identificativo univoco (solo minuscole, numeri e trattini)</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="type" class="form-label">Tipo *</label>
+                        <select class="form-select" id="type" name="type" required>
+                            <option value="">- Seleziona Tipo -</option>
+                            <option value="association">Associazione</option>
+                            <option value="observatory">Osservatorio</option>
+                            <option value="university">Università</option>
+                            <option value="independent">Indipendente</option>
+                            <option value="other">Altro</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="referente_name" class="form-label">Nome Referente</label>
+                        <input type="text" class="form-control" id="referente_name" name="referente_name"
+                               placeholder="es: Mario Rossi">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="referente_email" class="form-label">Email Referente</label>
+                        <input type="email" class="form-control" id="referente_email" name="referente_email"
+                               placeholder="es: mario.rossi@example.com">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="slack_namespace" class="form-label">Slack Namespace</label>
+                        <input type="text" class="form-control" id="slack_namespace" name="slack_namespace"
+                               placeholder="es: uai" pattern="[a-z0-9-]+">
+                        <small class="form-text text-muted">Namespace per canali Slack (default: stesso dello slug)</small>
+                    </div>
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked>
+                        <label class="form-check-label" for="is_active">
+                            Associazione attiva
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-primary" id="createAssociationBtn">
+                    <i class="bi bi-plus"></i> Crea Associazione
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('createAssociationBtn')?.addEventListener('click', async function() {
+    const form = document.getElementById('createAssociationForm');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
+    const formData = new FormData(form);
+    const data = {};
+    formData.forEach((value, key) => {
+        if (key === 'is_active') {
+            data[key] = document.getElementById('is_active').checked;
+        } else if (value) {
+            data[key] = value;
+        }
+    });
+
+    // Se slack_namespace non specificato, usa slug
+    if (!data.slack_namespace && data.slug) {
+        data.slack_namespace = data.slug;
+    }
+
+    // Show loading
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Creazione...';
+
+    try {
+        const response = await fetch('/agata/admin/api/associations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            alert('Associazione creata con successo!');
+            window.location.reload();
+        } else {
+            alert('Errore: ' + (result.error || 'Impossibile creare associazione'));
+            this.disabled = false;
+            this.innerHTML = '<i class="bi bi-plus"></i> Crea Associazione';
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Errore di connessione');
+        this.disabled = false;
+        this.innerHTML = '<i class="bi bi-plus"></i> Crea Associazione';
+    }
+});
+
+// Auto-genera slug dal nome
+document.getElementById('name')?.addEventListener('input', function() {
+    const slugInput = document.getElementById('slug');
+    if (!slugInput.value || slugInput.dataset.autoGenerated) {
+        const slug = this.value
+            .toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Rimuovi accenti
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        slugInput.value = slug;
+        slugInput.dataset.autoGenerated = 'true';
+    }
+});
+
+document.getElementById('slug')?.addEventListener('input', function() {
+    this.dataset.autoGenerated = 'false';
+});
+
+// Funzione per eliminare associazione
+async function deleteAssociation(associationId, associationName) {
+    const confirmed = confirm(
+        `⚠️  ATTENZIONE\n\n` +
+        `Stai per eliminare l'associazione "${associationName}".\n\n` +
+        `Verranno eliminati anche:\n` +
+        `• Tutti i canali Slack dal database\n` +
+        `• Tutti i progetti\n` +
+        `• Tutti gli utenti\n\n` +
+        `NOTA: I canali rimarranno su Slack e dovranno essere eliminati manualmente.\n\n` +
+        `Confermi l'eliminazione?`
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/agata/admin/api/associations/${associationId}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            const msg = `✅ Associazione "${result.deleted.association_name}" eliminata!\n\n` +
+                       `Eliminati dal database:\n` +
+                       `• ${result.deleted.slack_channels} canali Slack\n` +
+                       `• ${result.deleted.projects} progetti\n` +
+                       `• ${result.deleted.users} utenti\n\n` +
+                       `${result.note}`;
+            alert(msg);
+            window.location.reload();
+        } else {
+            alert('❌ Errore: ' + (result.error || 'Impossibile eliminare associazione'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('❌ Errore di connessione');
+    }
+}
+</script>
+{% endif %}
+{% endblock %}

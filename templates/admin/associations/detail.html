@@ -1,0 +1,223 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ association.name }} - AGATA Admin{% endblock %}
+{% block page_title %}
+    <div class="d-flex align-items-center justify-content-between w-100">
+        <div class="d-flex align-items-center">
+            <a href="{{ url_for('admin.list_associations') }}" class="btn btn-sm btn-outline-secondary me-3">
+                <i class="bi bi-arrow-left"></i> Torna alle associazioni
+            </a>
+            <div>
+                <h5 class="mb-0">{{ association.name }}</h5>
+                <small class="text-muted">{{ association.slug }}</small>
+            </div>
+        </div>
+        {% if current_user.role == 'superuser' %}
+        <button class="btn btn-sm btn-outline-danger"
+                onclick="deleteAssociation({{ association.id }}, '{{ association.name }}')"
+                title="Elimina associazione">
+            <i class="bi bi-trash"></i> Elimina
+        </button>
+        {% endif %}
+    </div>
+{% endblock %}
+{% block content %}
+<div class="row g-4">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-building me-2"></i>Informazioni Base</h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-2"><strong>Nome:</strong> {{ association.name }}</div>
+                <div class="mb-2"><strong>Slug:</strong> <code>{{ association.slug }}</code></div>
+                <div class="mb-2"><strong>Tipo:</strong> <span class="badge bg-secondary">{{ association.type }}</span></div>
+                <div class="mb-2"><strong>Stato:</strong>
+                    {% if association.is_active %}
+                    <span class="badge bg-success">Attiva</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Inattiva</span>
+                    {% endif %}
+                </div>
+                <div class="mb-2"><strong>Referente:</strong> {{ association.referente_name or '-' }}</div>
+                <div class="mb-2"><strong>Email referente:</strong> {{ association.referente_email or '-' }}</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-slack me-2"></i>Configurazione Slack</h6>
+            </div>
+            <div class="card-body">
+                {% if current_user.role == 'superuser' %}
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <strong>Integrazione Slack:</strong>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch"
+                                   id="slackToggle"
+                                   {% if association.slack_enabled %}checked{% endif %}
+                                   onchange="toggleSlack({{ association.id }}, this.checked)">
+                            <label class="form-check-label" for="slackToggle" id="slackToggleLabel">
+                                {% if association.slack_enabled %}
+                                <span class="badge bg-success">Abilitata</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Disabilitata</span>
+                                {% endif %}
+                            </label>
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        Se disabilitata, non verranno creati canali, thread o notifiche Slack per questa associazione.
+                    </small>
+                </div>
+                {% else %}
+                <div class="mb-2">
+                    <strong>Integrazione Slack:</strong>
+                    {% if association.slack_enabled %}
+                    <span class="badge bg-success">Abilitata</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Disabilitata</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+                <div class="mb-2"><strong>Namespace:</strong> <code>{{ association.slack_namespace or association.slug }}</code></div>
+                <div class="mb-3">
+                    <strong>Canali:</strong>
+                    {% for ch in slack_channels %}
+                    <div class="mt-2">
+                        <code>{{ ch.channel_name }}</code>
+                        <span class="badge bg-secondary ms-2">{{ ch.channel_type }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Statistiche</h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-4">
+                        <h3 class="text-primary">{{ stats.total_projects }}</h3>
+                        <small class="text-muted">Progetti Totali</small>
+                    </div>
+                    <div class="col-4">
+                        <h3 class="text-success">{{ stats.active_projects }}</h3>
+                        <small class="text-muted">Attivi</small>
+                    </div>
+                    <div class="col-4">
+                        <h3 class="text-info">{{ stats.total_users }}</h3>
+                        <small class="text-muted">Utenti</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-people me-2"></i>Utenti</h6>
+            </div>
+            <div class="card-body">
+                {% if users %}
+                <div class="list-group list-group-flush">
+                    {% for u in users %}
+                    <div class="list-group-item px-0">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <strong>{{ u.full_name }}</strong><br>
+                                <small class="text-muted">{{ u.email }}</small>
+                            </div>
+                            <span class="badge bg-secondary">{{ u.role }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">Nessun utente</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if current_user.role == 'superuser' %}
+<script>
+async function toggleSlack(associationId, enabled) {
+    try {
+        const response = await fetch(`/agata/admin/api/associations/${associationId}/slack-toggle`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slack_enabled: enabled })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            // Aggiorna il badge
+            const label = document.getElementById('slackToggleLabel');
+            if (enabled) {
+                label.innerHTML = '<span class="badge bg-success">Abilitata</span>';
+            } else {
+                label.innerHTML = '<span class="badge bg-secondary">Disabilitata</span>';
+            }
+        } else {
+            // Ripristina lo stato del toggle
+            document.getElementById('slackToggle').checked = !enabled;
+            alert('Errore: ' + (result.error || 'Impossibile modificare stato Slack'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        // Ripristina lo stato del toggle
+        document.getElementById('slackToggle').checked = !enabled;
+        alert('Errore di connessione');
+    }
+}
+
+async function deleteAssociation(associationId, associationName) {
+    const confirmed = confirm(
+        `⚠️  ATTENZIONE\n\n` +
+        `Stai per eliminare l'associazione "${associationName}".\n\n` +
+        `Verranno eliminati anche:\n` +
+        `• Tutti i canali Slack dal database\n` +
+        `• Tutti i progetti\n` +
+        `• Tutti gli utenti\n\n` +
+        `NOTA: I canali rimarranno su Slack e dovranno essere eliminati manualmente.\n\n` +
+        `Confermi l'eliminazione?`
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/agata/admin/api/associations/${associationId}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            const msg = `✅ Associazione "${result.deleted.association_name}" eliminata!\n\n` +
+                       `Eliminati dal database:\n` +
+                       `• ${result.deleted.slack_channels} canali Slack\n` +
+                       `• ${result.deleted.projects} progetti\n` +
+                       `• ${result.deleted.users} utenti\n\n` +
+                       `${result.note}`;
+            alert(msg);
+            window.location.href = '/agata/admin/associations';
+        } else {
+            alert('❌ Errore: ' + (result.error || 'Impossibile eliminare associazione'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('❌ Errore di connessione');
+    }
+}
+</script>
+{% endif %}
+{% endblock %}

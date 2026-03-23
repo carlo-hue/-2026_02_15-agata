@@ -1,0 +1,870 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Catalogo Progetti - AGATA Admin{% endblock %}
+{% block page_title %}Catalogo Progetti AGATA{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <!-- Quick Filters (Tab-like buttons) -->
+        <div class="mb-3">
+            <div class="btn-group" role="group">
+                <a href="{{ url_for('admin.list_projects', show='mine') }}"
+                   class="btn btn-sm {% if current_show == 'mine' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    <i class="bi bi-person-check me-1"></i>I Miei Progetti
+                    {% if my_projects_count > 0 %}<span class="badge bg-light text-primary ms-1">{{ my_projects_count }}</span>{% endif %}
+                </a>
+                <a href="{{ url_for('admin.list_projects', show='available') }}"
+                   class="btn btn-sm {% if current_show == 'available' %}btn-success{% else %}btn-outline-success{% endif %}">
+                    <i class="bi bi-star me-1"></i>Disponibili
+                    {% if available_count > 0 %}<span class="badge bg-light text-success ms-1">{{ available_count }}</span>{% endif %}
+                </a>
+                {% if is_admin or is_superuser %}
+                <a href="{{ url_for('admin.list_projects', show='unassigned') }}"
+                   class="btn btn-sm {% if current_show == 'unassigned' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+                    <i class="bi bi-inbox me-1"></i>Non Assegnati
+                </a>
+                {% endif %}
+                <a href="{{ url_for('admin.list_projects', show='active') }}"
+                   class="btn btn-sm {% if current_show == 'active' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                    <i class="bi bi-folder me-1"></i>Tutti Attivi
+                </a>
+                <a href="{{ url_for('admin.list_projects', show='all') }}"
+                   class="btn btn-sm {% if current_show == 'all' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+                    <i class="bi bi-archive me-1"></i>Archivio Completo
+                </a>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-white">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h6 class="mb-0">
+                            <i class="bi bi-folder me-2"></i>Progetti ({{ total }})
+                            {% if current_show == 'mine' %}
+                            <small class="text-muted">- Assegnati a me</small>
+                            {% elif current_show == 'available' %}
+                            <small class="text-muted">- Disponibili per assegnazione</small>
+                            {% elif current_show == 'unassigned' %}
+                            <small class="text-muted">- Senza analyst</small>
+                            {% elif current_show == 'all' %}
+                            <small class="text-muted">- Archivio completo</small>
+                            {% endif %}
+                        </h6>
+                    </div>
+                    <div class="col-auto">
+                        {% if current_user.role in ['admin', 'superuser'] %}
+                        <!-- Nuovo Progetto (solo admin/superuser) -->
+                        <button class="btn btn-sm btn-primary me-2" data-bs-toggle="modal" data-bs-target="#createProjectModal">
+                            <i class="bi bi-plus-circle"></i> Nuovo Progetto
+                        </button>
+                        {% endif %}
+                        <!-- Filtri Avanzati -->
+                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#filters">
+                            <i class="bi bi-funnel"></i> Filtri Avanzati
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filtri Avanzati (collassati) -->
+                <div class="collapse mt-3 {% if current_state or current_gaia_id or current_assigned_to or current_association_id %}show{% endif %}" id="filters">
+                    <form method="get" class="row g-2 align-items-end">
+                        <!-- Mantieni show corrente -->
+                        <input type="hidden" name="show" value="{{ current_show }}">
+
+                        {% if is_superuser %}
+                        <div class="col-md-2">
+                            <label class="form-label small">Associazione</label>
+                            <select name="association_id" class="form-select form-select-sm">
+                                <option value="">Tutte</option>
+                                {% for assoc in associations %}
+                                <option value="{{ assoc.id }}" {% if current_association_id == assoc.id %}selected{% endif %}>
+                                    {{ assoc.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        <div class="col-md-2">
+                            <label class="form-label small">Stato</label>
+                            <select name="state" class="form-select form-select-sm">
+                                <option value="">Tutti</option>
+                                <option value="active" {% if current_state == 'active' %}selected{% endif %}>Non Cancellati</option>
+                                <option value="incoming" {% if current_state == 'incoming' %}selected{% endif %}>Incoming</option>
+                                <option value="available" {% if current_state == 'available' %}selected{% endif %}>Available</option>
+                                <option value="assigned" {% if current_state == 'assigned' %}selected{% endif %}>Assigned</option>
+                                <option value="in_review" {% if current_state == 'in_review' %}selected{% endif %}>In Review</option>
+                                <option value="submitted_aavso" {% if current_state == 'submitted_aavso' %}selected{% endif %}>Submitted AAVSO</option>
+                                <option value="accepted_aavso" {% if current_state == 'accepted_aavso' %}selected{% endif %}>Accepted AAVSO</option>
+                                <option value="cancelled" {% if current_state == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                            </select>
+                        </div>
+
+                        {% if is_admin or is_superuser %}
+                        <div class="col-md-2">
+                            <label class="form-label small">Analyst</label>
+                            <select name="assigned_to" class="form-select form-select-sm">
+                                <option value="">Tutti</option>
+                                <option value="me" {% if current_assigned_to == 'me' %}selected{% endif %}>Assegnati a me</option>
+                                <option value="none" {% if current_assigned_to == 'none' %}selected{% endif %}>Non assegnati</option>
+                                {% for analyst in analysts %}
+                                <option value="{{ analyst.id }}" {% if current_assigned_to == analyst.id|string %}selected{% endif %}>
+                                    {{ analyst.full_name or analyst.name or analyst.email }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        <div class="col-md-3">
+                            <label class="form-label small">Gaia ID</label>
+                            <input type="text" name="gaia_id" class="form-control form-control-sm"
+                                   placeholder="Cerca per Gaia ID..."
+                                   value="{{ current_gaia_id or '' }}">
+                        </div>
+
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-sm btn-primary">
+                                <i class="bi bi-search me-1"></i>Filtra
+                            </button>
+                            <a href="{{ url_for('admin.list_projects', show=current_show) }}" class="btn btn-sm btn-outline-secondary">
+                                Reset
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card-body p-0">
+                {% if projects %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-admin mb-0">
+                        <thead>
+                            <tr>
+                                <th><a href="?page=1&show={{ current_show }}{% if current_state %}&state={{ current_state }}{% endif %}{% if current_gaia_id %}&gaia_id={{ current_gaia_id }}{% endif %}{% if current_assigned_to %}&assigned_to={{ current_assigned_to }}{% endif %}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}&sort=project_code&order={% if current_sort == 'project_code' and current_order == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: inherit;" class="sortable-header">Project Code {% if current_sort == 'project_code' %}<i class="bi bi-arrow-{% if current_order == 'desc' %}down{% else %}up{% endif %}"></i>{% endif %}</a></th>
+                                <th><a href="?page=1&show={{ current_show }}{% if current_state %}&state={{ current_state }}{% endif %}{% if current_gaia_id %}&gaia_id={{ current_gaia_id }}{% endif %}{% if current_assigned_to %}&assigned_to={{ current_assigned_to }}{% endif %}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}&sort=gaia_id&order={% if current_sort == 'gaia_id' and current_order == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: inherit;" class="sortable-header">Gaia ID {% if current_sort == 'gaia_id' %}<i class="bi bi-arrow-{% if current_order == 'desc' %}down{% else %}up{% endif %}"></i>{% endif %}</a></th>
+                                {% if is_superuser %}
+                                <th>Associazione</th>
+                                {% endif %}
+                                <th><a href="?page=1&show={{ current_show }}{% if current_state %}&state={{ current_state }}{% endif %}{% if current_gaia_id %}&gaia_id={{ current_gaia_id }}{% endif %}{% if current_assigned_to %}&assigned_to={{ current_assigned_to }}{% endif %}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}&sort=state&order={% if current_sort == 'state' and current_order == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: inherit;" class="sortable-header">Stato {% if current_sort == 'state' %}<i class="bi bi-arrow-{% if current_order == 'desc' %}down{% else %}up{% endif %}"></i>{% endif %}</a></th>
+                                <th>Analyst</th>
+                                <th>Note</th>
+                                <th>Slack</th>
+                                <th><a href="?page=1&show={{ current_show }}{% if current_state %}&state={{ current_state }}{% endif %}{% if current_gaia_id %}&gaia_id={{ current_gaia_id }}{% endif %}{% if current_assigned_to %}&assigned_to={{ current_assigned_to }}{% endif %}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}&sort=updated_at&order={% if current_sort == 'updated_at' and current_order == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: inherit;" class="sortable-header">Aggiornato {% if current_sort == 'updated_at' %}<i class="bi bi-arrow-{% if current_order == 'desc' %}down{% else %}up{% endif %}"></i>{% endif %}</a></th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for project in projects %}
+                            <tr>
+                                <td><strong>{{ project.project_code }}</strong></td>
+                                <td><code>{{ project.gaia_id }}</code></td>
+                                {% if is_superuser %}
+                                <td>
+                                    <span class="badge bg-info position-relative editable-association"
+                                          style="cursor: pointer;"
+                                          data-project-id="{{ project.id }}"
+                                          data-association="{{ project.association_name }}"
+                                          title="Clicca per modificare">
+                                        {{ project.association_name }}
+                                        <i class="bi bi-pencil-square small ms-1"></i>
+                                    </span>
+                                </td>
+                                {% endif %}
+                                <td>
+                                    {% if project.state == 'incoming' %}
+                                    <span class="badge bg-secondary">{{ project.state }}</span>
+                                    {% elif project.state == 'available' %}
+                                    <span class="badge bg-success">{{ project.state }}</span>
+                                    {% elif project.state == 'assigned' %}
+                                    <span class="badge bg-primary">{{ project.state }}</span>
+                                    {% elif project.state == 'in_review' %}
+                                    <span class="badge bg-warning text-dark">{{ project.state }}</span>
+                                    {% elif project.state == 'submitted_aavso' %}
+                                    <span class="badge bg-info">{{ project.state }}</span>
+                                    {% elif project.state == 'accepted_aavso' %}
+                                    <span class="badge bg-success">{{ project.state }}</span>
+                                    {% elif project.state == 'cancelled' %}
+                                    <span class="badge bg-danger">{{ project.state }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ project.state }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if current_user.role in ['admin', 'superuser'] %}
+                                    <div class="position-relative editable-analyst"
+                                         style="cursor: pointer;"
+                                         data-project-id="{{ project.id }}"
+                                         data-analyst-id="{{ project.assigned_user_id or '' }}">
+                                        {% if project.assigned_user_name %}
+                                        {% if project.assigned_user_id == current_user.id|string %}
+                                        <strong class="text-primary">{{ project.assigned_user_name }}</strong>
+                                        <small class="text-muted">(tu)</small>
+                                        {% else %}
+                                        {{ project.assigned_user_name }}
+                                        {% endif %}
+                                        <i class="bi bi-pencil-square small ms-1 text-muted" style="opacity: 0.5;"></i>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        <i class="bi bi-pencil-square small ms-1 text-muted" style="opacity: 0.5;"></i>
+                                        {% endif %}
+                                    </div>
+                                    {% else %}
+                                    <div>
+                                        {% if project.assigned_user_name %}
+                                        {% if project.assigned_user_id == current_user.id|string %}
+                                        <strong class="text-primary">{{ project.assigned_user_name }}</strong>
+                                        <small class="text-muted">(tu)</small>
+                                        {% else %}
+                                        {{ project.assigned_user_name }}
+                                        {% endif %}
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if current_user.role in ['admin', 'superuser'] or project.assigned_user_id == current_user.id|string %}
+                                    <div class="position-relative editable-notes"
+                                         style="cursor: pointer; max-width: 300px;"
+                                         data-project-id="{{ project.id }}"
+                                         data-notes='{{ project.notes|tojson }}'>
+                                        {% if project.notes %}
+                                        <small style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">{{ project.notes[:250] }}{% if project.notes|length > 250 %}...{% endif %}</small>
+                                        <i class="bi bi-pencil-square small ms-1 text-muted" style="opacity: 0.5;"></i>
+                                        {% else %}
+                                        <span class="text-muted"><i class="bi bi-plus-circle"></i> Aggiungi</span>
+                                        {% endif %}
+                                    </div>
+                                    {% else %}
+                                    <div style="max-width: 300px;">
+                                        {% if project.notes %}
+                                        <small style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">{{ project.notes[:250] }}{% if project.notes|length > 250 %}...{% endif %}</small>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if project.slack_thread_ts %}
+                                    <i class="bi bi-check-circle text-success" title="Thread attivo"></i>
+                                    {% else %}
+                                    <i class="bi bi-dash-circle text-muted"></i>
+                                    {% endif %}
+                                </td>
+                                <td class="small text-muted">{{ project.updated_at[:10] if project.updated_at else '-' }}</td>
+                                <td class="text-nowrap">
+                                    {% if project.state == 'incoming' and current_user.role in ['admin', 'superuser'] %}
+                                    <button class="btn btn-sm btn-warning btn-action me-1"
+                                            onclick="makeAvailable({{ project.id }}, '{{ project.project_code }}')"
+                                            title="Rendi disponibile per assegnazione">
+                                        <i class="bi bi-check-circle"></i>
+                                    </button>
+                                    {% endif %}
+                                    {% if project.state == 'available' and current_user.role in ['analyst', 'reviewer', 'admin'] %}
+                                    <button class="btn btn-sm btn-success btn-action me-1"
+                                            onclick="selfAssign({{ project.id }}, '{{ project.project_code }}')"
+                                            title="Assegnami questo progetto">
+                                        <i class="bi bi-person-check"></i>
+                                    </button>
+                                    {% endif %}
+                                    {% if project.state not in ['incoming', 'cancelled'] %}
+                                    <a href="{{ url_for('variable_stars.index') }}?project_id={{ project.id }}"
+                                       class="btn btn-sm btn-info btn-action me-1" target="_blank"
+                                       title="Apri in editor">
+                                        <i class="bi bi-graph-up"></i>
+                                    </a>
+                                    {% endif %}
+                                    <a href="{{ url_for('admin.project_detail', project_id=project.id) }}"
+                                       class="btn btn-sm btn-outline-primary btn-action">
+                                        Dettagli
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                    {% if current_show == 'mine' %}
+                    <p>Non hai progetti assegnati.</p>
+                    <a href="{{ url_for('admin.list_projects', show='available') }}" class="btn btn-success">
+                        <i class="bi bi-star me-2"></i>Vedi progetti disponibili
+                    </a>
+                    {% elif current_show == 'available' %}
+                    <p>Non ci sono progetti disponibili per l'assegnazione.</p>
+                    {% else %}
+                    <p>Nessun progetto trovato con i filtri selezionati.</p>
+                    <a href="{{ url_for('admin.list_projects') }}" class="btn btn-outline-secondary">
+                        Reset filtri
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if total > per_page %}
+<nav>
+    <ul class="pagination justify-content-center">
+        {% if page > 1 %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page - 1 }}&show={{ current_show }}{% if current_state %}&state={{ current_state }}{% endif %}{% if current_gaia_id %}&gaia_id={{ current_gaia_id }}{% endif %}{% if current_assigned_to %}&assigned_to={{ current_assigned_to }}{% endif %}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}">Precedente</a>
+        </li>
+        {% endif %}
+
+        <li class="page-item active">
+            <span class="page-link">{{ page }} di {{ ((total - 1) // per_page) + 1 }}</span>
+        </li>
+
+        {% if page * per_page < total %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page + 1 }}&show={{ current_show }}{% if current_state %}&state={{ current_state }}{% endif %}{% if current_gaia_id %}&gaia_id={{ current_gaia_id }}{% endif %}{% if current_assigned_to %}&assigned_to={{ current_assigned_to }}{% endif %}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}">Successivo</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Modal: Modifica Associazione -->
+<div class="modal fade" id="editAssociationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Modifica Associazione</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editAssociationForm">
+                    <div class="mb-3">
+                        <label class="form-label">Seleziona Associazione</label>
+                        <select class="form-select" id="associationSelect" name="association_id" required>
+                            <option value="">-- Seleziona --</option>
+                            {% for assoc in associations %}
+                            <option value="{{ assoc.id }}">{{ assoc.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-primary" onclick="submitEditAssociation()">Salva</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Modifica Analyst -->
+<div class="modal fade" id="editAnalystModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Modifica Analyst</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editAnalystForm">
+                    <div class="mb-3">
+                        <label class="form-label">Seleziona Analyst</label>
+                        <select class="form-select" id="analystSelect" name="analyst_id" required>
+                            <option value="">-- Seleziona --</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-primary" onclick="submitEditAnalyst()">Salva</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Modifica Note -->
+<div class="modal fade" id="editNotesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Modifica Note</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editNotesForm">
+                    <div class="mb-3">
+                        <label class="form-label">Note</label>
+                        <textarea class="form-control" id="notesInput" name="notes" rows="3" placeholder="Aggiungi note..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-primary" onclick="submitEditNotes()">Salva</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Crea Nuovo Progetto -->
+<div class="modal fade" id="createProjectModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Crea Nuovo Progetto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createProjectForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="gaia_id" class="form-label">Gaia DR3 ID *</label>
+                                <input type="text" class="form-control" id="gaia_id" name="gaia_id" required
+                                       placeholder="es: 1234567890123456">
+                                <small class="form-text text-muted">ID sorgente Gaia DR3</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="source" class="form-label">Sorgente Dati</label>
+                                <select class="form-select" id="source" name="source">
+                                    <option value="">- Seleziona -</option>
+                                    <option value="ZTF">ZTF</option>
+                                    <option value="TESS">TESS</option>
+                                    <option value="ASAS-SN">ASAS-SN</option>
+                                    <option value="Gaia">Gaia</option>
+                                    <option value="QLP">QLP</option>
+                                    <option value="Other">Altro</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if is_superuser %}
+                    <div class="mb-3">
+                        <label for="association_id" class="form-label">Associazione *</label>
+                        <select class="form-select" id="association_id" name="association_id" required>
+                            <option value="">- Seleziona Associazione -</option>
+                            {% for assoc in associations %}
+                            <option value="{{ assoc.id }}">{{ assoc.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Titolo/Descrizione</label>
+                        <input type="text" class="form-control" id="title" name="title"
+                               placeholder="Breve descrizione del progetto">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="ra" class="form-label">RA (gradi)</label>
+                                <input type="number" step="0.000001" class="form-control" id="ra" name="ra"
+                                       placeholder="es: 123.456789">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="dec_deg" class="form-label">Dec (gradi)</label>
+                                <input type="number" step="0.000001" class="form-control" id="dec_deg" name="dec_deg"
+                                       placeholder="es: -45.123456">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="magnitude" class="form-label">Magnitudine</label>
+                                <input type="number" step="0.01" class="form-control" id="magnitude" name="magnitude"
+                                       placeholder="es: 12.5">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info mb-0">
+                        <small>
+                            <i class="bi bi-info-circle"></i>
+                            {% if is_superuser %}
+                            Il progetto verra creato in stato <strong>incoming</strong>. L'admin dell'associazione dovra renderlo disponibile per l'assegnazione.
+                            {% else %}
+                            Il progetto verra creato in stato <strong>available</strong> e potra essere subito assegnato.
+                            {% endif %}
+                        </small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-primary" id="createProjectBtn">
+                    <i class="bi bi-plus-circle"></i> Crea Progetto
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.sortable-header {
+    cursor: pointer;
+    padding: 0.5rem;
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.sortable-header:hover {
+    opacity: 0.7;
+}
+
+.sortable-header i {
+    margin-left: 0.25rem;
+    font-size: 0.85em;
+}
+</style>
+
+<script>
+// Store current project ID being edited
+let currentProjectId = null;
+
+// Event listeners per modifiche inline
+document.querySelectorAll('.editable-association').forEach(el => {
+    el.addEventListener('click', function() {
+        currentProjectId = this.dataset.projectId;
+        const modal = new bootstrap.Modal(document.getElementById('editAssociationModal'));
+        modal.show();
+    });
+});
+
+document.querySelectorAll('.editable-analyst').forEach(el => {
+    el.addEventListener('click', function() {
+        currentProjectId = this.dataset.projectId;
+        const currentAnalystId = this.dataset.analystId;
+
+        // Carica lista analyst disponibili
+        fetch(`/agata/admin/api/projects/${currentProjectId}/assignable-users`)
+            .then(r => r.json())
+            .then(users => {
+                const select = document.getElementById('analystSelect');
+                select.innerHTML = '<option value="">-- Seleziona --</option>';
+                users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.id;
+                    option.textContent = `${user.name} (${user.role})`;
+                    if (user.id == currentAnalystId) {
+                        option.selected = true;
+                    }
+                    select.appendChild(option);
+                });
+
+                const modal = new bootstrap.Modal(document.getElementById('editAnalystModal'));
+                modal.show();
+            })
+            .catch(err => {
+                alert('Errore nel caricamento analyst: ' + err);
+            });
+    });
+});
+
+// Mantieni riferimento all'elemento per aggiornarlo dopo il salvataggio
+let currentNotesElement = null;
+
+function attachNotesListeners() {
+    const elements = document.querySelectorAll('.editable-notes');
+
+    elements.forEach(el => {
+        el.addEventListener('click', function() {
+            currentProjectId = this.dataset.projectId;
+            currentNotesElement = this;
+            let notes = this.dataset.notes || 'null';
+            // Parse JSON (tojson output viene sempre come stringa JSON)
+            try {
+                notes = JSON.parse(notes);
+            } catch (e) {
+                // Fallback: usa come stringa
+                notes = String(notes);
+            }
+            // Se null, converti a stringa vuota
+            notes = notes || '';
+            document.getElementById('notesInput').value = notes;
+            const modal = new bootstrap.Modal(document.getElementById('editNotesModal'));
+            modal.show();
+        });
+    });
+}
+
+// Attach listeners quando il DOM è pronto
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', attachNotesListeners);
+} else {
+    attachNotesListeners();
+}
+
+// Funzioni per salvare le modifiche
+function submitEditAssociation() {
+    const select = document.getElementById('associationSelect');
+    const newAssociationId = select.value;
+    const btn = event.target;
+    const originalHtml = btn.innerHTML;
+
+    if (!newAssociationId) {
+        alert('Seleziona un\'associazione');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Salvataggio...';
+
+    fetch(`/agata/admin/api/projects/${currentProjectId}/move`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({new_association_id: newAssociationId})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            btn.innerHTML = '<i class="bi bi-check-circle"></i> Salvato!';
+            btn.classList.add('btn-success');
+            btn.classList.remove('btn-primary');
+            setTimeout(() => {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editAssociationModal'));
+                modal.hide();
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-primary');
+                location.reload();
+            }, 500);
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+            alert('Errore: ' + data.error);
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        alert('Errore: ' + err);
+    });
+}
+
+function submitEditAnalyst() {
+    const select = document.getElementById('analystSelect');
+    const analystId = select.value;
+    const analystName = select.options[select.selectedIndex].text;
+    const btn = event.target;
+    const originalHtml = btn.innerHTML;
+
+    if (!analystId) {
+        alert('Seleziona un analyst');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Salvataggio...';
+
+    // Usa reassign se già assegnato, altrimenti assign
+    const currentAnalystId = document.querySelector(`[data-project-id="${currentProjectId}"].editable-analyst`)?.dataset.analystId;
+    const endpoint = currentAnalystId ? 'reassign' : 'assign';
+
+    fetch(`/agata/admin/api/projects/${currentProjectId}/${endpoint}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({analyst_id: analystId})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            // Aggiorna il valore visualizzato nella lista
+            const editableAnalyst = document.querySelector(`[data-project-id="${currentProjectId}"].editable-analyst`);
+            if (editableAnalyst) {
+                editableAnalyst.dataset.analystId = analystId;
+                editableAnalyst.innerHTML = `${analystName}<i class="bi bi-pencil-square small ms-1 text-muted" style="opacity: 0.5;"></i>`;
+            }
+
+            btn.innerHTML = '<i class="bi bi-check-circle"></i> Salvato!';
+            btn.classList.add('btn-success');
+            btn.classList.remove('btn-primary');
+            setTimeout(() => {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editAnalystModal'));
+                modal.hide();
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-primary');
+            }, 500);
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+            alert('Errore: ' + data.error);
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        alert('Errore: ' + err);
+    });
+}
+
+function submitEditNotes() {
+    const notes = document.getElementById('notesInput').value;
+    const btn = event.target;
+    const originalHtml = btn.innerHTML;
+
+    // Disabilita il bottone durante l'operazione
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Salvataggio...';
+
+    fetch(`/agata/admin/api/projects/${currentProjectId}/notes`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({notes: notes})
+    })
+    .then(r => {
+        if (!r.ok) {
+            console.error('HTTP Error:', r.status, r.statusText);
+        }
+        return r.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Aggiorna il data-notes
+            if (currentNotesElement) {
+                currentNotesElement.dataset.notes = JSON.stringify(notes);
+
+                // Aggiorna il contenuto visualizzato
+                if (notes.trim()) {
+                    const displayText = notes.substring(0, 250) + (notes.length > 250 ? '...' : '');
+                    // Escapa l'HTML per sicurezza
+                    const div = document.createElement('div');
+                    div.textContent = displayText;
+                    const escapedText = div.innerHTML;
+
+                    currentNotesElement.innerHTML = `<small style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">${escapedText}</small><i class="bi bi-pencil-square small ms-1 text-muted" style="opacity: 0.5;"></i>`;
+                } else {
+                    currentNotesElement.innerHTML = '<span class="text-muted"><i class="bi bi-plus-circle"></i> Aggiungi</span>';
+                }
+            }
+
+            // Mostra un messaggio di successo
+            btn.innerHTML = '<i class="bi bi-check-circle"></i> Salvato!';
+            btn.classList.add('btn-success');
+            btn.classList.remove('btn-primary');
+
+            // Chiudi il modale subito
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editNotesModal'));
+            modal.hide();
+            // Ripristina il bottone dopo un breve ritardo per mostrare il feedback
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-primary');
+            }, 500);
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+            console.error('Errore API:', data);
+            alert('Errore: ' + (data.error || 'Errore sconosciuto'));
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        console.error('Errore fetch:', err);
+        alert('Errore: ' + err);
+    });
+}
+
+function makeAvailable(projectId, projectCode) {
+    if (!confirm(`Vuoi rendere disponibile il progetto ${projectCode}?\n\nSara assegnabile agli analyst.`)) return;
+
+    fetch(`/agata/admin/api/projects/${projectId}/make-available`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Errore: ' + data.error);
+        }
+    })
+    .catch(err => {
+        alert('Errore di rete: ' + err);
+    });
+}
+
+function selfAssign(projectId, projectCode) {
+    if (!confirm(`Vuoi assegnarti il progetto ${projectCode}?`)) return;
+
+    fetch(`/agata/admin/api/projects/${projectId}/self-assign`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Errore: ' + data.error);
+        }
+    })
+    .catch(err => {
+        alert('Errore di rete: ' + err);
+    });
+}
+
+document.getElementById('createProjectBtn')?.addEventListener('click', async function() {
+    const form = document.getElementById('createProjectForm');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
+    const formData = new FormData(form);
+    const data = {};
+    formData.forEach((value, key) => {
+        if (value) data[key] = value;
+    });
+
+    // Show loading
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Creazione...';
+
+    try {
+        const response = await fetch('/agata/admin/api/projects', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            alert('Progetto creato con successo!');
+            window.location.href = '/agata/admin/projects/' + result.project_id;
+        } else {
+            alert('Errore: ' + (result.error || 'Impossibile creare progetto'));
+            this.disabled = false;
+            this.innerHTML = '<i class="bi bi-plus-circle"></i> Crea Progetto';
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Errore di connessione');
+        this.disabled = false;
+        this.innerHTML = '<i class="bi bi-plus-circle"></i> Crea Progetto';
+    }
+});
+</script>
+{% endblock %}

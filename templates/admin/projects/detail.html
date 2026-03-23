@@ -1,0 +1,630 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ project.project_code }} - AGATA Admin{% endblock %}
+
+{% block page_title %}
+    <div class="d-flex align-items-center">
+        <a href="{{ url_for('admin.list_projects') }}" class="btn btn-sm btn-outline-secondary me-3">
+            <i class="bi bi-arrow-left"></i> Torna ai progetti
+        </a>
+        <div>
+            <h5 class="mb-0">{{ project.project_code }}</h5>
+            <small class="text-muted">Gaia DR3: {{ project.gaia_id }}</small>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+<!-- Intestazione Progetto -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h4 class="mb-2">{{ project.title or 'Progetto ' + project.project_code }}</h4>
+                        <div class="mb-3">
+                            <span class="badge {% if project.state == 'assigned' %}bg-primary{% elif project.state == 'in_review' %}bg-warning{% elif project.state == 'accepted_aavso' %}bg-success{% elif project.state == 'cancelled' %}bg-secondary{% else %}bg-info{% endif %} badge-state">
+                                {{ project.state | upper }}
+                            </span>
+                            <span class="ms-2 text-muted">
+                                <i class="bi bi-building"></i> {{ project.association.name }}
+                            </span>
+                        </div>
+                        <div class="row text-muted small">
+                            <div class="col-md-6">
+                                <strong>Source:</strong> {{ project.source or 'N/A' }}<br>
+                                <strong>Magnitude:</strong> <span id="magDisplay">{{ project.magnitude or 'N/A' }}</span><br>
+                                <strong>RA:</strong> <span id="raDisplay">{{ project.ra or 'N/A' }}°</span>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Dec:</strong> <span id="decDisplay">{{ project.dec_deg or 'N/A' }}°</span><br>
+                                <strong>Creato:</strong> {{ project.created_at.strftime('%Y-%m-%d %H:%M') if project.created_at else 'N/A' }}<br>
+                                <strong>Aggiornato:</strong> {{ project.updated_at.strftime('%Y-%m-%d %H:%M') if project.updated_at else 'N/A' }}
+                            </div>
+                        </div>
+
+                        <!-- Warning + Button Aggiorna Gaia -->
+                        {% if not project.ra or not project.dec_deg or not project.magnitude %}
+                        <div class="alert alert-warning alert-sm mt-2 mb-0" style="font-size: 0.85rem; padding: 0.5rem;">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Coordinate mancanti - necessarie per analisi comparativa
+                        </div>
+                        {% endif %}
+                        <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="refreshGaiaBtn"
+                                onclick="refreshGaiaData()" title="Recupera coordinate e parametri da Gaia DR3">
+                            <i class="bi bi-arrow-repeat"></i> Aggiorna da Gaia
+                        </button>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <!-- Azioni Context-Aware -->
+                        <div class="btn-group-vertical" role="group">
+                            {% if allowed_actions.can_self_assign %}
+                            <button class="btn btn-primary btn-sm" onclick="selfAssign()">
+                                <i class="bi bi-person-check"></i> Assegnami questo progetto
+                            </button>
+                            {% endif %}
+
+                            {% if allowed_actions.can_assign %}
+                            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#assignModal">
+                                <i class="bi bi-person-plus"></i> Assegna Analyst
+                            </button>
+                            {% endif %}
+
+                            {% if allowed_actions.can_open_editor %}
+                            <a href="{{ url_for('variable_stars.index') }}?project_id={{ project.id }}" class="btn btn-info btn-sm" target="_blank">
+                                <i class="bi bi-graph-up"></i> Apri in Editor
+                            </a>
+                            {% endif %}
+
+                            {% if allowed_actions.can_reassign %}
+                            <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#reassignModal">
+                                <i class="bi bi-arrow-repeat"></i> Riassegna
+                            </button>
+                            {% endif %}
+
+                            {% if allowed_actions.can_send_to_review %}
+                            <button class="btn btn-success btn-sm" onclick="sendToReview()">
+                                <i class="bi bi-send"></i> Invia in Review
+                            </button>
+                            {% endif %}
+
+                            {% if allowed_actions.can_cancel %}
+                            <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#cancelModal">
+                                <i class="bi bi-x-circle"></i> Cancella Progetto
+                            </button>
+                            {% endif %}
+
+                            {% if allowed_actions.can_change_state %}
+                            <button class="btn btn-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#changeStateModal">
+                                <i class="bi bi-arrow-left-right"></i> Cambio Stato
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Colonna sinistra: Info progetto -->
+    <div class="col-md-6">
+        <!-- Assegnazione -->
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-person me-2"></i>Assegnazione</h6>
+            </div>
+            <div class="card-body">
+                {% if project.assigned_user %}
+                <div class="d-flex align-items-center mb-2">
+                    <i class="bi bi-person-circle fs-3 me-3 text-primary"></i>
+                    <div>
+                        <strong>{{ project.assigned_user.full_name }}</strong><br>
+                        <small class="text-muted">{{ project.assigned_user.email }}</small><br>
+                        <small class="text-muted">Assegnato: {{ project.assigned_at.strftime('%Y-%m-%d %H:%M') if project.assigned_at else 'N/A' }}</small>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Nessun analyst assegnato</p>
+                {% endif %}
+
+                {% if project.reviewer %}
+                <hr>
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-eye-fill fs-3 me-3 text-success"></i>
+                    <div>
+                        <strong>Reviewer:</strong> {{ project.reviewer.full_name }}<br>
+                        <small class="text-muted">{{ project.reviewer.email }}</small>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Slack Context -->
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-slack me-2"></i>Contesto Slack</h6>
+            </div>
+            <div class="card-body">
+                {% if slack_thread %}
+                <div class="mb-2">
+                    <strong>Tipo:</strong> <span class="badge bg-info">Thread</span>
+                </div>
+                <div class="mb-2">
+                    <strong>Canale:</strong> <code>{{ slack_thread.channel_id }}</code>
+                </div>
+                <div class="mb-2">
+                    <strong>Thread TS:</strong> <code>{{ slack_thread.thread_ts }}</code>
+                </div>
+                <div class="mb-2">
+                    <strong>Ultimo aggiornamento:</strong> {{ slack_thread.updated_at.strftime('%Y-%m-%d %H:%M') if slack_thread.updated_at else 'N/A' }}
+                </div>
+                <a href="#" class="btn btn-sm btn-outline-primary" target="_blank">
+                    <i class="bi bi-box-arrow-up-right"></i> Apri in Slack
+                </a>
+                {% else %}
+                <p class="text-muted mb-0">Nessun thread Slack associato</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Review Notes -->
+        {% if project.review_notes %}
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-chat-text me-2"></i>Note Review</h6>
+            </div>
+            <div class="card-body">
+                <p class="mb-0">{{ project.review_notes }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Note Generali -->
+        <div class="card">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-sticky me-2"></i>Note</h6>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="editNotesBtn" onclick="toggleNotesEdit()">
+                    <i class="bi bi-pencil"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="notesDisplay">
+                    {% if project.notes %}
+                    <p class="mb-0" style="white-space: pre-wrap;">{{ project.notes }}</p>
+                    {% else %}
+                    <p class="text-muted mb-0 fst-italic">Nessuna nota</p>
+                    {% endif %}
+                </div>
+                <div id="notesEditForm" style="display: none;">
+                    <textarea class="form-control mb-2" id="projectNotesInput" rows="3"
+                              placeholder="Aggiungi note...">{{ project.notes or '' }}</textarea>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-primary" onclick="saveNotes()">
+                            <i class="bi bi-check"></i> Salva
+                        </button>
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="cancelNotesEdit()">
+                            Annulla
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Colonna destra: Timeline -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Timeline Audit</h6>
+            </div>
+            <div class="card-body">
+                {% if audit_trail %}
+                <div class="timeline">
+                    {% for event in audit_trail %}
+                    <div class="timeline-item mb-3 pb-3 border-bottom">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>{{ event.action }}</strong><br>
+                                <small class="text-muted">{{ event.description }}</small><br>
+                                {% if event.old_value or event.new_value %}
+                                <small>
+                                    {% if event.old_value %}<code>{{ event.old_value }}</code> →{% endif %}
+                                    <code class="text-success">{{ event.new_value }}</code>
+                                </small>
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">{{ event.created_at.strftime('%Y-%m-%d %H:%M') if event.created_at else 'N/A' }}</small>
+                        </div>
+                        {% if event.user_email %}
+                        <small class="text-muted">
+                            <i class="bi bi-person"></i> {{ event.user_email }}
+                        </small>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Nessun evento registrato</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Assign -->
+<div class="modal fade" id="assignModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Assegna Analyst</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="assignForm">
+                    <div class="mb-3">
+                        <label class="form-label">Seleziona Analyst</label>
+                        <select class="form-select" name="analyst_id" required>
+                            <option value="">-- Seleziona --</option>
+                            {% for analyst in available_analysts %}
+                            <option value="{{ analyst.id }}">{{ analyst.full_name }} ({{ analyst.role }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-primary" onclick="submitAssign()">Assegna</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Reassign -->
+<div class="modal fade" id="reassignModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Riassegna Progetto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="reassignForm">
+                    <div class="mb-3">
+                        <label class="form-label">Nuovo Analyst</label>
+                        <select class="form-select" name="analyst_id" required>
+                            <option value="">-- Seleziona --</option>
+                            {% for analyst in available_analysts %}
+                            <option value="{{ analyst.id }}" {% if project.assigned_to == analyst.id %}selected{% endif %}>
+                                {{ analyst.full_name }} ({{ analyst.role }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Motivo (opzionale)</label>
+                        <textarea class="form-control" name="reason" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-warning" onclick="submitReassign()">Riassegna</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Cancel -->
+<div class="modal fade" id="cancelModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Cancella Progetto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> Questa azione cambierà lo stato del progetto in "cancelled".
+                </div>
+                <form id="cancelForm">
+                    <div class="mb-3">
+                        <label class="form-label">Motivazione (obbligatoria)</label>
+                        <textarea class="form-control" name="reason" rows="3" required></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-danger" onclick="submitCancel()">Cancella Progetto</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Change State -->
+<div class="modal fade" id="changeStateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Cambia Stato Progetto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> Stato attuale: <strong>{{ project.state }}</strong>
+                </div>
+                <form id="changeStateForm">
+                    <div class="mb-3">
+                        <label class="form-label">Nuovo Stato</label>
+                        <select class="form-select" name="new_state" required>
+                            <option value="">-- Seleziona --</option>
+                            <option value="incoming">Incoming</option>
+                            <option value="available">Available</option>
+                            <option value="assigned">Assigned</option>
+                            <option value="in_review">In Review</option>
+                            <option value="submitted_aavso">Submitted AAVSO</option>
+                            <option value="accepted_aavso">Accepted AAVSO</option>
+                            <option value="rejected_aavso">Rejected AAVSO</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nota (opzionale)</label>
+                        <textarea class="form-control" name="note" rows="2" placeholder="Motivo del cambio stato..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-primary" onclick="submitChangeState()">Cambia Stato</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const PROJECT_ID = {{ project.id }};
+
+function selfAssign() {
+    if (!confirm('Vuoi assegnarti questo progetto?')) return;
+
+    fetch(`/agata/admin/api/projects/${PROJECT_ID}/self-assign`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message || 'Progetto assegnato con successo');
+            location.reload();
+        } else {
+            alert('Errore: ' + data.error);
+        }
+    })
+    .catch(err => {
+        alert('Errore di rete: ' + err);
+    });
+}
+
+function sendToReview() {
+    if (!confirm('Inviare il progetto in review?')) return;
+
+    fetch(`/agata/admin/api/projects/${PROJECT_ID}/send-to-review`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Progetto inviato in review');
+            location.reload();
+        } else {
+            alert('Errore: ' + data.error);
+        }
+    });
+}
+
+function submitAssign() {
+    const form = document.getElementById('assignForm');
+    const data = new FormData(form);
+
+    fetch(`/agata/admin/api/projects/${PROJECT_ID}/assign`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({analyst_id: data.get('analyst_id')})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Progetto assegnato');
+            location.reload();
+        } else {
+            alert('Errore: ' + data.error);
+        }
+    });
+}
+
+function submitReassign() {
+    const form = document.getElementById('reassignForm');
+    const data = new FormData(form);
+
+    fetch(`/agata/admin/api/projects/${PROJECT_ID}/reassign`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            analyst_id: data.get('analyst_id'),
+            reason: data.get('reason')
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Progetto riassegnato');
+            location.reload();
+        } else {
+            alert('Errore: ' + data.error);
+        }
+    });
+}
+
+function submitCancel() {
+    const form = document.getElementById('cancelForm');
+    const data = new FormData(form);
+    const reason = data.get('reason');
+
+    if (!reason || !reason.trim()) {
+        alert('La motivazione è obbligatoria');
+        return;
+    }
+
+    fetch(`/agata/admin/api/projects/${PROJECT_ID}/cancel`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reason: reason})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Progetto cancellato');
+            location.reload();
+        } else {
+            alert('Errore: ' + data.error);
+        }
+    });
+}
+
+function submitChangeState() {
+    const form = document.getElementById('changeStateForm');
+    const data = new FormData(form);
+    const newState = data.get('new_state');
+    const note = data.get('note');
+
+    if (!newState) {
+        alert('Seleziona un nuovo stato');
+        return;
+    }
+
+    fetch(`/agata/admin/api/projects/${PROJECT_ID}/change-state`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({new_state: newState, reason: note})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Stato aggiornato');
+            location.reload();
+        } else {
+            alert('Errore: ' + data.error);
+        }
+    });
+}
+
+// Gestione Note
+function toggleNotesEdit() {
+    document.getElementById('notesDisplay').style.display = 'none';
+    document.getElementById('notesEditForm').style.display = 'block';
+    document.getElementById('editNotesBtn').style.display = 'none';
+    document.getElementById('projectNotesInput').focus();
+}
+
+function cancelNotesEdit() {
+    document.getElementById('notesDisplay').style.display = 'block';
+    document.getElementById('notesEditForm').style.display = 'none';
+    document.getElementById('editNotesBtn').style.display = 'inline-block';
+}
+
+function saveNotes() {
+    const notes = document.getElementById('projectNotesInput').value;
+
+    fetch(`/agata/admin/api/projects/${PROJECT_ID}/notes`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ notes: notes })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            const display = document.getElementById('notesDisplay');
+            if (notes.trim()) {
+                display.innerHTML = `<p class="mb-0" style="white-space: pre-wrap;">${escapeHtml(notes)}</p>`;
+            } else {
+                display.innerHTML = '<p class="text-muted mb-0 fst-italic">Nessuna nota</p>';
+            }
+            cancelNotesEdit();
+        } else {
+            alert('Errore: ' + data.error);
+        }
+    })
+    .catch(err => alert('Errore: ' + err));
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Aggiorna coordinate da Gaia DR3
+async function refreshGaiaData() {
+    const btn = document.getElementById('refreshGaiaBtn');
+    const originalHtml = btn.innerHTML;
+
+    // Disable button e mostra loading
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise spinner-border spinner-border-sm"></i> Aggiornamento...';
+
+    try {
+        const response = await fetch(`/agata/admin/api/projects/${PROJECT_ID}/refresh-gaia-data`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Aggiorna i campi visualizzati
+            const raDisplay = document.getElementById('raDisplay');
+            const decDisplay = document.getElementById('decDisplay');
+            const magDisplay = document.getElementById('magDisplay');
+
+            if (result.updated_data.ra !== null) {
+                raDisplay.textContent = result.updated_data.ra.toFixed(6) + '°';
+            }
+            if (result.updated_data.dec !== null) {
+                decDisplay.textContent = result.updated_data.dec.toFixed(6) + '°';
+            }
+            if (result.updated_data.magnitude !== null) {
+                magDisplay.textContent = result.updated_data.magnitude.toFixed(2);
+            }
+
+            // Nascondi warning se presente
+            const warning = document.querySelector('.alert-warning');
+            if (warning) {
+                warning.style.display = 'none';
+            }
+
+            // Mostra messaggio successo
+            alert(`Dati Gaia aggiornati con successo!\n\nRA: ${result.updated_data.ra?.toFixed(6)}°\nDec: ${result.updated_data.dec?.toFixed(6)}°\nMag: ${result.updated_data.magnitude?.toFixed(2)}\n\nPuoi ora usare l'analisi comparativa.`);
+
+            // Ricarica pagina
+            location.reload();
+        } else {
+            alert('Errore: ' + result.error);
+        }
+    } catch (error) {
+        alert('Errore: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    }
+}
+</script>
+{% endblock %}

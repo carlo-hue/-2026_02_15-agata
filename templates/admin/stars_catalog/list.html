@@ -1,0 +1,1023 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Catalogo Stelle - AGATA Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">Catalogo Stelle Locali</h1>
+            <p class="text-muted mb-0">
+                {% if is_superuser %}
+                Bacino centrale stelle - assegna a associazioni
+                {% elif is_admin %}
+                Stelle assegnate alla tua associazione
+                {% else %}
+                Stelle con progetti disponibili
+                {% endif %}
+            </p>
+        </div>
+        <div class="d-flex gap-3 align-items-center">
+            <!-- Conteggio stelle (solo se caricate) -->
+            {% if should_load_stars %}
+            <div class="text-end">
+                <small class="text-muted d-block">Stelle filtrate</small>
+                <strong class="fs-5">{{ stars|length }} / {{ total_stars }}</strong>
+            </div>
+            {% endif %}
+
+            <!-- Toolbar Toggle Preview Grafici -->
+            <div class="d-flex align-items-center gap-2">
+                <button id="toggleChartsBtn" class="btn btn-sm btn-outline-primary" onclick="toggleCharts()">
+                    <i class="bi bi-graph-up me-1"></i>Grafici
+                </button>
+                <div id="chartsToolbar" class="d-none" style="display: flex !important; gap: 0.5rem; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                        <label class="form-label mb-0" style="font-size: 0.8rem;">Max:</label>
+                        <select id="previewMaxPoints" class="form-select form-select-sm" style="width: auto;">
+                            <option value="300" selected>300</option>
+                            <option value="500">500</option>
+                            <option value="1000">1000</option>
+                            <option value="2000">2000</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                        <label class="form-label mb-0" style="font-size: 0.8rem;">W:</label>
+                        <select id="chartWidth" class="form-select form-select-sm" style="width: auto;">
+                            <option value="300" selected>300px</option>
+                            <option value="400">400px</option>
+                            <option value="500">500px</option>
+                            <option value="600">600px</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            {% if is_superuser %}
+            <a href="{{ url_for('admin.external_catalogs_page') }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-cloud-download me-1"></i>Importa
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Messaggio iniziale Superuser -->
+    {% if is_superuser and not should_load_stars %}
+    <div class="alert alert-primary mb-4">
+        <i class="bi bi-info-circle me-2"></i>
+        <strong>Benvenuto nel Catalogo Stelle!</strong>
+        Usa i filtri rapidi qui sotto per iniziare: seleziona lo stato delle stelle che vuoi visualizzare (Tutte, Senza assegnazioni, Assegnate, Con progetto).
+    </div>
+    {% endif %}
+
+    <!-- Quick Filters & Recent Uploads (Combined Single Row) - Visible only for superuser -->
+    {% if is_superuser %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-center">
+                <!-- Filtri Rapidi (solo Superuser) -->
+                <div class="col-auto">
+                    <h6 class="mb-2 mb-md-0"><i class="bi bi-filter-circle me-2"></i>Filtri</h6>
+                </div>
+                <div class="col-auto">
+                    <a href="?state=all&date_filter={{ date_filter }}" class="btn btn-sm {% if state_filter == 'all' and should_load_stars %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        <i class="bi bi-star me-1"></i>Tutte
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <a href="?state=unassigned&date_filter={{ date_filter }}" class="btn btn-sm {% if state_filter == 'unassigned' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+                        <i class="bi bi-question-circle me-1"></i>Senza assegnazioni
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <a href="?state=assigned&date_filter={{ date_filter }}" class="btn btn-sm {% if state_filter == 'assigned' %}btn-info{% else %}btn-outline-info{% endif %}">
+                        <i class="bi bi-pin me-1"></i>Assegnate
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <a href="?state=with_project&date_filter={{ date_filter }}" class="btn btn-sm {% if state_filter == 'with_project' %}btn-success{% else %}btn-outline-success{% endif %}">
+                        <i class="bi bi-check-circle me-1"></i>Con progetto
+                    </a>
+                </div>
+
+                <!-- Separator -->
+                <div class="col-auto" style="border-left: 1px solid #dee2e6; height: 32px;"></div>
+
+                <!-- Caricamenti Recenti -->
+                <div class="col-auto">
+                    <h6 class="mb-2 mb-md-0"><i class="bi bi-calendar-event me-2"></i>Caricamenti</h6>
+                </div>
+                <div class="col-auto">
+                    <a href="?state={{ state_filter }}&date_filter=all" class="btn btn-sm {% if date_filter == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        <i class="bi bi-hourglass-split me-1"></i>Tutti
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <a href="?state={{ state_filter }}&date_filter=24h" class="btn btn-sm {% if date_filter == '24h' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        <i class="bi bi-clock me-1"></i>24h
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <a href="?state={{ state_filter }}&date_filter=7d" class="btn btn-sm {% if date_filter == '7d' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        <i class="bi bi-calendar me-1"></i>7gg
+                    </a>
+                </div>
+
+                <!-- Separator -->
+                <div class="col-auto" style="border-left: 1px solid #dee2e6; height: 32px;"></div>
+
+                <!-- Legend/Info -->
+                <div class="col-auto">
+                    <small class="text-muted" style="display: block; font-size: 0.8rem; line-height: 1.3;">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>Bacino centrale</strong> di stelle. Assegna alle associazioni con i filtri.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quick Filter Buttons per ADMIN (Stato stelle senza progetti) -->
+    {% if is_admin %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-center">
+                <div class="col-auto">
+                    <h6 class="mb-2 mb-md-0"><i class="bi bi-diagram-3 me-2"></i>Filtri</h6>
+                </div>
+                <div class="col-auto">
+                    <a href="?state=assigned&project_filter=all&date_filter={{ date_filter }}" class="btn btn-sm {% if state_filter == 'assigned' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        <i class="bi bi-pin me-1"></i>Senza progetto
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <a href="?state=all&project_filter=all&date_filter={{ date_filter }}" class="btn btn-sm {% if state_filter == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        <i class="bi bi-star me-1"></i>Tutte
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <a href="?state=with_project&project_filter=all&date_filter={{ date_filter }}" class="btn btn-sm {% if state_filter == 'with_project' %}btn-success{% else %}btn-outline-success{% endif %}">
+                        <i class="bi bi-check-circle me-1"></i>Con progetto
+                    </a>
+                </div>
+
+                <!-- Separator -->
+                <div class="col-auto" style="border-left: 1px solid #dee2e6; height: 32px;"></div>
+
+                <!-- Caricamenti Recenti -->
+                <div class="col-auto">
+                    <h6 class="mb-2 mb-md-0"><i class="bi bi-calendar-event me-2"></i>Caricamenti</h6>
+                </div>
+                <div class="col-auto">
+                    <a href="?state={{ state_filter }}&date_filter=all" class="btn btn-sm {% if date_filter == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        <i class="bi bi-hourglass-split me-1"></i>Tutti
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <a href="?state={{ state_filter }}&date_filter=24h" class="btn btn-sm {% if date_filter == '24h' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        <i class="bi bi-clock me-1"></i>24h
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <a href="?state={{ state_filter }}&date_filter=7d" class="btn btn-sm {% if date_filter == '7d' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        <i class="bi bi-calendar me-1"></i>7gg
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quick Filter Buttons per ANALYST -->
+    {% if is_analyst %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-center">
+                <div class="col-auto">
+                    <h6 class="mb-2 mb-md-0"><i class="bi bi-diagram-3 me-2"></i>Filtri</h6>
+                </div>
+                <div class="col-auto">
+                    <a href="?project_filter=all&state={{ state_filter }}&date_filter={{ date_filter }}" class="btn btn-sm {% if project_filter == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        <i class="bi bi-person-check me-1"></i>Miei progetti
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <a href="?project_filter=assigned_to_others&state={{ state_filter }}&date_filter={{ date_filter }}" class="btn btn-sm {% if project_filter == 'assigned_to_others' %}btn-info{% else %}btn-outline-info{% endif %}">
+                        <i class="bi bi-people me-1"></i>Di altri
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Filtri Avanzati -->
+    <div class="card mb-4">
+        <div class="card-header bg-white">
+            <div class="row align-items-center">
+                <div class="col">
+                    <h6 class="mb-0">
+                        <i class="bi bi-funnel me-2"></i>Filtri Avanzati
+                    </h6>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#filtersPanel">
+                        <i class="bi bi-chevron-down"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="collapse {% if catalog_filter or gaia_search or current_page != 1 %}show{% endif %}" id="filtersPanel">
+            <div class="card-body">
+                <form method="GET" class="row g-3 align-items-end">
+                    <!-- Mantieni i filtri rapidi nel form -->
+                    <input type="hidden" name="state" value="{{ state_filter }}">
+                    <input type="hidden" name="date_filter" value="{{ date_filter }}">
+                    <input type="hidden" name="project_filter" value="{{ project_filter }}">
+
+                    {% if available_catalogs %}
+                    <div class="col-md-2">
+                        <label class="form-label">Catalogo</label>
+                        <select name="catalog" class="form-select form-select-sm">
+                            <option value="">Tutti</option>
+                            {% for catalog in available_catalogs %}
+                            <option value="{{ catalog }}" {% if catalog_filter == catalog %}selected{% endif %}>
+                                {{ catalog }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    {% if available_imports %}
+                    <div class="col-md-2">
+                        <label class="form-label">Import</label>
+                        <select name="import_id" class="form-select form-select-sm">
+                            <option value="">Tutti</option>
+                            {% for imp in available_imports %}
+                            <option value="{{ imp.id }}" {% if import_filter == imp.id|string %}selected{% endif %}>
+                                #{{ imp.id }} - {{ imp.selected_catalogs|default('') }} ({{ imp.total_points_imported|default(0) }} punti)
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    <!-- NUOVO: Filtro Variable Type (VAST) -->
+                    {% if available_variable_types %}
+                    <div class="col-md-2">
+                        <label class="form-label">Tipo Variabile (VAST)</label>
+                        <select name="variable_type" class="form-select form-select-sm">
+                            <option value="">Tutti</option>
+                            {% for vtype in available_variable_types %}
+                            <option value="{{ vtype }}" {% if variable_type_filter == vtype %}selected{% endif %}>
+                                {{ vtype }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    <!-- NUOVO: Checkbox variabili note -->
+                    <div class="col-md-2">
+                        <label class="form-label">Variabili</label>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" name="known_variables_only"
+                                   id="knownVarsCheckbox" value="true" {% if known_var_filter %}checked{% endif %}>
+                            <label class="form-check-label" for="knownVarsCheckbox" style="font-size: 0.85rem;">
+                                <i class="bi bi-check-circle"></i> Solo note
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="form-label">Ordinamento</label>
+                        <select name="sort" class="form-select form-select-sm">
+                            <option value="updated_at" {% if sort_by == 'updated_at' %}selected{% endif %}>Data</option>
+                            <option value="gaia_id" {% if sort_by == 'gaia_id' %}selected{% endif %}>Gaia ID</option>
+                            <option value="points" {% if sort_by == 'points' %}selected{% endif %}>Punti</option>
+                            <option value="catalogs" {% if sort_by == 'catalogs' %}selected{% endif %}>N. Cataloghi</option>
+                            <option value="min_mag" {% if sort_by == 'min_mag' %}selected{% endif %}>Mag Min</option>
+                            <option value="max_mag" {% if sort_by == 'max_mag' %}selected{% endif %}>Mag Max</option>
+                            <option value="avg_mag" {% if sort_by == 'avg_mag' %}selected{% endif %}>Mag Media</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-1">
+                        <label class="form-label">Ordine</label>
+                        <select name="order" class="form-select form-select-sm">
+                            <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>↓ Decrescente</option>
+                            <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>↑ Crescente</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Cerca Gaia ID</label>
+                        <input type="text" name="gaia_id" class="form-control form-control-sm"
+                               placeholder="Es. 1923802270916606336"
+                               value="{{ gaia_search or '' }}">
+                    </div>
+
+                    {% if is_superuser %}
+                    <div class="col-md-2">
+                        <label class="form-label">Associazione</label>
+                        <select name="association_id" class="form-select form-select-sm">
+                            <option value="">Bacino Centrale</option>
+                            {% for assoc in associations %}
+                            <option value="{{ assoc.id }}" {% if filter_association_id == assoc.id %}selected{% endif %}>
+                                {{ assoc.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="bi bi-search me-1"></i>Applica
+                        </button>
+                        <a href="{{ url_for('admin.stars_catalog_page') }}" class="btn btn-sm btn-outline-secondary">
+                            Reset
+                        </a>
+                    </div>
+
+                    <div class="col-12 text-muted small">
+                        Visualizzando {{ stars|length }} di {{ total_stars }} stelle assegnate (pagina {{ current_page }})
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legenda stati - Per admin/analyst -->
+    {% if is_admin or is_analyst %}
+    <div class="alert alert-info mb-4">
+        <i class="bi bi-info-circle me-2"></i>
+        <strong>Catalogo Stelle:</strong>
+        {% if is_admin %}
+            Vedi le stelle assegnate alla tua associazione dal superuser.
+            Puoi creare un progetto per ogni stella per iniziare l'analisi.
+        {% elif is_analyst %}
+            Stelle disponibili per l'assegnazione. Assegnati i progetti con i quali vuoi lavorare.
+        {% endif %}
+    </div>
+    {% endif %}
+
+
+    <!-- Azioni Bulk (visibili solo per superuser con selezione) -->
+    {% if is_superuser and stars %}
+    <div class="card mb-4 d-none" id="bulkActionsPanel">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col">
+                    <small class="text-muted">
+                        <span id="selectedCount">0</span> stelle selezionate
+                    </small>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-sm btn-primary" onclick="openBulkAssignModal()">
+                        <i class="bi bi-link me-1"></i>Assegna a Associazione
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="clearSelection()">
+                        <i class="bi bi-x me-1"></i>Deseleziona Tutto
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Lista Stelle -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="starsTable">
+                    <thead>
+                        <tr>
+                            {% if is_superuser %}
+                            <th style="width: 30px">
+                                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)">
+                            </th>
+                            {% endif %}
+                            <th>
+                                <a href="?page=1&state={{ state_filter }}&catalog={{ catalog_filter }}&import_id={{ import_filter }}&gaia_id={{ gaia_search }}&sort=gaia_id&order={% if sort_by == 'gaia_id' and sort_order == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: inherit;" class="sortable-header">
+                                    Gaia DR3 ID {% if sort_by == 'gaia_id' %}<i class="bi bi-arrow-{% if sort_order == 'desc' %}down{% else %}up{% endif %}"></i>{% endif %}
+                                </a>
+                            </th>
+                            <th class="text-center">
+                                <a href="?page=1&state={{ state_filter }}&catalog={{ catalog_filter }}&import_id={{ import_filter }}&gaia_id={{ gaia_search }}&sort=points&order={% if sort_by == 'points' and sort_order == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: inherit;" class="sortable-header">
+                                    Punti {% if sort_by == 'points' %}<i class="bi bi-arrow-{% if sort_order == 'desc' %}down{% else %}up{% endif %}"></i>{% endif %}
+                                </a>
+                            </th>
+                            <th class="text-center">
+                                <a href="?page=1&state={{ state_filter }}&catalog={{ catalog_filter }}&import_id={{ import_filter }}&gaia_id={{ gaia_search }}&sort=catalogs&order={% if sort_by == 'catalogs' and sort_order == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: inherit;" class="sortable-header">
+                                    Cataloghi {% if sort_by == 'catalogs' %}<i class="bi bi-arrow-{% if sort_order == 'desc' %}down{% else %}up{% endif %}"></i>{% endif %}
+                                </a>
+                            </th>
+                            <th>Range JD</th>
+                            <th>Range Mag</th>
+                            <th style="width: 320px" class="preview-column d-none">Anteprima</th>
+                            <th>Import</th>
+                            <th>Assegnazione</th>
+                            <!-- NUOVO: Colonna Variable Type -->
+                            <th style="width: 180px; min-width: 180px;">Tipo Variabile</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for star in stars %}
+                        <tr data-gaia-id="{{ star.gaia_id }}">
+                            {% if is_superuser %}
+                            <td>
+                                <input type="checkbox" class="star-checkbox" value="{{ star.gaia_id }}" onchange="updateBulkActionsPanel()">
+                            </td>
+                            {% endif %}
+                            <td>
+                                <a href="{{ url_for('admin.star_detail', gaia_id=star.gaia_id) }}">
+                                    <code>{{ star.gaia_id }}</code>
+                                </a>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-primary">{{ star.total_points }}</span>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-secondary">{{ star.num_catalogs }}</span>
+                                <small class="d-block text-muted">
+                                    {{ star.catalogs[:3]|join(', ') }}{% if star.catalogs|length > 3 %}...{% endif %}
+                                </small>
+                            </td>
+                            <td>
+                                {% if star.min_hjd and star.max_hjd %}
+                                <small>
+                                    {{ "%.1f"|format(star.min_hjd) }} -<br>
+                                    {{ "%.1f"|format(star.max_hjd) }}
+                                </small>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if star.min_mag and star.max_mag %}
+                                <small>
+                                    {{ "%.2f"|format(star.min_mag) }} -
+                                    {{ "%.2f"|format(star.max_mag) }}
+                                </small>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="preview-column d-none">
+                                <div id="plot-{{ star.gaia_id }}" style="width: 300px; height: 120px; position: relative;">
+                                    <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: #f5f5f5; border-radius: 4px;">
+                                        <small class="text-muted">Caricamento...</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                {% if star.import_info %}
+                                <a href="{{ url_for('admin.stars_catalog_page', import_id=star.import_info.id) }}" class="badge bg-info text-dark" style="text-decoration: none;">
+                                    #{{ star.import_info.id }}
+                                </a>
+                                <small class="d-block text-muted">{{ star.import_info.created_at }}</small>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if star.all_assignments %}
+                                <div class="badge-group">
+                                    {% for assign in star.all_assignments %}
+                                    <span class="badge bg-warning text-dark d-inline-block mb-1">
+                                        <i class="bi bi-pin-fill"></i> {{ assign.association_name }}
+                                        <small class="d-block">{{ assign.assigned_at }}</small>
+                                    </span>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                {% if star.project_code %}
+                                <span class="badge bg-success d-inline-block mb-1">
+                                    <i class="bi bi-check-circle"></i> {{ star.project_code }}
+                                    <small class="d-block">{{ star.project_state }}</small>
+                                </span>
+                                {% endif %}
+                            </td>
+                            <!-- NUOVO: Colonna Variable Type -->
+                            <td style="font-size: 0.85rem;">
+                                {% if star.is_known_variable %}
+                                    <span class="badge bg-success me-1" title="Variabile nota in catalogo">
+                                        <i class="bi bi-check-circle me-1"></i>Nota
+                                    </span>
+                                {% endif %}
+
+                                {% if star.variable_types %}
+                                    {% for vtype in star.variable_types[:3] %}
+                                        <span class="badge bg-info me-1">{{ vtype }}</span>
+                                    {% endfor %}
+                                    {% if star.variable_types|length > 3 %}
+                                        <span class="badge bg-secondary" title="E altri {{ star.variable_types|length - 3 }} tipi">
+                                            +{{ star.variable_types|length - 3 }}
+                                        </span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+
+                                <!-- Tooltip con catalog_matches -->
+                                {% if star.catalog_matches %}
+                                    <br><small class="text-muted" title="Cataloghi di match: {{ star.catalog_matches|join(', ') }}">
+                                        Match: {{ (star.catalog_matches|join(', '))[:50] }}{% if (star.catalog_matches|join(', '))|length > 50 %}...{% endif %}
+                                    </small>
+                                {% endif %}
+                            </td>
+                            <td class="text-nowrap">
+                                {% if star.project_id and star.project_state and star.project_state not in ['incoming', 'cancelled'] %}
+                                <!-- Editor link quando stella ha progetto attivo -->
+                                <a href="{{ url_for('variable_stars.index') }}?project_id={{ star.project_id }}"
+                                   class="btn btn-sm btn-outline-info me-1"
+                                   target="_blank"
+                                   title="Apri in editor">
+                                    <i class="bi bi-graph-up"></i>
+                                </a>
+                                {% elif (is_admin or is_superuser) and not star.project_id %}
+                                <!-- Editor link per admin/superuser su stella senza progetto -->
+                                <a href="{{ url_for('variable_stars.index') }}?gaia_id={{ star.gaia_id }}"
+                                   class="btn btn-sm btn-outline-info me-1"
+                                   target="_blank"
+                                   title="Apri in editor per esaminare">
+                                    <i class="bi bi-graph-up"></i>
+                                </a>
+                                {% endif %}
+                                {% if star.can_create_project %}
+                                <!-- Admin: crea progetto da assegnazione -->
+                                <button class="btn btn-sm btn-warning me-1"
+                                        onclick="createProject('{{ star.gaia_id }}')"
+                                        title="Crea progetto da questa stella">
+                                    <i class="bi bi-plus-circle"></i>
+                                </button>
+                                {% endif %}
+                                {% if star.can_self_assign %}
+                                <!-- Analyst: auto-assegnazione progetto -->
+                                <button class="btn btn-sm btn-success me-1"
+                                        onclick="selfAssign({{ star.project_id }}, '{{ star.project_code }}')"
+                                        title="Assegnami questo progetto">
+                                    <i class="bi bi-person-check"></i>
+                                </button>
+                                {% endif %}
+                                <a href="{{ url_for('admin.star_detail', gaia_id=star.gaia_id) }}"
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="{% if is_superuser %}9{% else %}8{% endif %}" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                {% if is_superuser %}
+                                Nessuna stella nel catalogo.
+                                <br>
+                                <a href="{{ url_for('admin.external_catalogs_page') }}" class="btn btn-primary mt-3">
+                                    Importa da Cataloghi Esterni
+                                </a>
+                                {% elif is_admin %}
+                                Nessuna stella assegnata alla tua associazione.
+                                <br>
+                                <small>Attendi che il superuser assegni delle stelle.</small>
+                                {% else %}
+                                Nessuna stella disponibile.
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginazione -->
+            {% if total_stars > per_page %}
+            <nav class="mt-3">
+                <ul class="pagination justify-content-center">
+                    {% if current_page > 1 %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1&state={{ state_filter }}&date_filter={{ date_filter }}&catalog={{ catalog_filter }}&import_id={{ import_filter }}&gaia_id={{ gaia_search }}&sort={{ sort_by }}&order={{ sort_order }}">
+                            <i class="bi bi-chevron-double-left"></i>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ current_page - 1 }}&state={{ state_filter }}&date_filter={{ date_filter }}&catalog={{ catalog_filter }}&import_id={{ import_filter }}&gaia_id={{ gaia_search }}&sort={{ sort_by }}&order={{ sort_order }}">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% set start_page = [current_page - 2, 1]|max %}
+                    {% set end_page = [(total_stars / per_page)|int + 1, current_page + 2]|min %}
+
+                    {% for page_num in range(start_page, end_page + 1) %}
+                        {% if page_num * per_page <= total_stars or (page_num - 1) * per_page < total_stars %}
+                        <li class="page-item {% if page_num == current_page %}active{% endif %}">
+                            <a class="page-link" href="?page={{ page_num }}&state={{ state_filter }}&date_filter={{ date_filter }}&catalog={{ catalog_filter }}&import_id={{ import_filter }}&gaia_id={{ gaia_search }}&sort={{ sort_by }}&order={{ sort_order }}">
+                                {{ page_num }}
+                            </a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if current_page * per_page < total_stars %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ current_page + 1 }}&state={{ state_filter }}&date_filter={{ date_filter }}&catalog={{ catalog_filter }}&import_id={{ import_filter }}&gaia_id={{ gaia_search }}&sort={{ sort_by }}&order={{ sort_order }}">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ (total_stars / per_page)|int + 1 }}&state={{ state_filter }}&date_filter={{ date_filter }}&catalog={{ catalog_filter }}&import_id={{ import_filter }}&gaia_id={{ gaia_search }}&sort={{ sort_by }}&order={{ sort_order }}">
+                            <i class="bi bi-chevron-double-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Carica Arrow prima dello script -->
+<script src="{{ url_for('admin.static', filename='js/Arrow.es2015.min.js') }}"></script>
+
+<script>
+// Selezione multipla
+function toggleSelectAll(checkbox) {
+    const checkboxes = document.querySelectorAll('.star-checkbox');
+    checkboxes.forEach(cb => cb.checked = checkbox.checked);
+    updateBulkActionsPanel();
+}
+
+function getSelectedStars() {
+    const checkboxes = document.querySelectorAll('.star-checkbox:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+function updateBulkActionsPanel() {
+    const selected = getSelectedStars();
+    const panel = document.getElementById('bulkActionsPanel');
+    const count = document.getElementById('selectedCount');
+
+    if (selected.length > 0) {
+        panel.classList.remove('d-none');
+        count.textContent = selected.length;
+    } else {
+        panel.classList.add('d-none');
+    }
+}
+
+function clearSelection() {
+    document.querySelectorAll('.star-checkbox').forEach(cb => cb.checked = false);
+    document.getElementById('selectAllCheckbox').checked = false;
+    updateBulkActionsPanel();
+}
+
+function openBulkAssignModal() {
+    const selected = getSelectedStars();
+    if (selected.length === 0) {
+        alert('Seleziona almeno una stella');
+        return;
+    }
+
+    const modalHtml = `
+    <div class="modal fade" id="bulkAssignModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Assegna ${selected.length} stella${selected.length > 1 ? 'e' : ''}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Associazione <span class="text-danger">*</span></label>
+                        <select id="bulkAssocSelect" class="form-select">
+                            <option value="">Seleziona associazione...</option>
+                            {% for assoc in associations %}
+                            <option value="{{ assoc.id }}">{{ assoc.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="alert alert-info small">
+                        <i class="bi bi-info-circle me-2"></i>
+                        L'assegnazione avverrà dopo la conferma.
+                    </div>
+                    <div id="bulkAssignMessage"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="button" class="btn btn-primary" onclick="confirmBulkAssign('${selected.join(',')}')">
+                        <i class="bi bi-check-circle me-1"></i>Conferma Assegnazione
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+
+    // Rimuovi vecchio modal se esiste
+    const oldModal = document.getElementById('bulkAssignModal');
+    if (oldModal) oldModal.remove();
+
+    // Aggiungi nuovo modal
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Mostra modal
+    const modal = new bootstrap.Modal(document.getElementById('bulkAssignModal'));
+    modal.show();
+}
+
+function confirmBulkAssign(gaiaIdsCsv) {
+    const gaiaIds = gaiaIdsCsv.split(',').filter(x => x.trim());
+    const associationId = document.getElementById('bulkAssocSelect').value;
+
+    if (!associationId) {
+        alert('Seleziona un\'associazione');
+        return;
+    }
+
+    // Disabilita pulsanti
+    const buttons = document.querySelectorAll('.modal-footer button');
+    buttons.forEach(b => b.disabled = true);
+
+    // Mostra messaggio di caricamento
+    const messageDiv = document.getElementById('bulkAssignMessage');
+    messageDiv.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Assegnazione in corso...';
+    messageDiv.className = 'alert alert-info mt-3';
+
+    fetch('/agata/admin/api/stars-catalog/bulk-assign', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            gaia_ids: gaiaIds,
+            association_id: parseInt(associationId)
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            let msg = `<i class="bi bi-check-circle me-2"></i>✓ Assegnate ${data.assigned} stelle`;
+            if (data.already_assigned > 0) msg += ` (${data.already_assigned} già presenti)`;
+            if (data.failed > 0) msg += ` (${data.failed} errori)`;
+
+            messageDiv.innerHTML = msg;
+            messageDiv.className = 'alert alert-success mt-3';
+
+            // Ricarica dopo 2 secondi
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            messageDiv.innerHTML = '<i class="bi bi-exclamation-circle me-2"></i>✗ Errore: ' + data.error;
+            messageDiv.className = 'alert alert-danger mt-3';
+            buttons.forEach(b => b.disabled = false);
+        }
+    })
+    .catch(err => {
+        messageDiv.innerHTML = '<i class="bi bi-exclamation-circle me-2"></i>✗ Errore di rete: ' + err;
+        messageDiv.className = 'alert alert-danger mt-3';
+        buttons.forEach(b => b.disabled = false);
+    });
+}
+
+function selfAssign(projectId, projectCode) {
+    if (!confirm(`Vuoi assegnarti il progetto ${projectCode}?`)) return;
+
+    fetch(`/agata/admin/api/projects/${projectId}/self-assign`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message || 'Progetto assegnato con successo');
+            location.reload();
+        } else {
+            alert('Errore: ' + data.error);
+        }
+    })
+    .catch(err => {
+        alert('Errore di rete: ' + err);
+    });
+}
+
+function createProject(gaiaId) {
+    if (!confirm(`Vuoi creare un progetto per la stella ${gaiaId}?\n\nIl progetto sarà disponibile per l'assegnazione agli analyst.`)) return;
+
+    fetch(`/agata/admin/api/stars-catalog/${gaiaId}/create-project`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message || 'Progetto creato con successo');
+            location.reload();
+        } else {
+            alert('Errore: ' + data.error);
+        }
+    })
+    .catch(err => {
+        alert('Errore di rete: ' + err);
+    });
+}
+
+// ============================================================================
+// CARICAMENTO GRAFICI PREVIEW
+// ============================================================================
+
+// Variabile di stato
+let chartsVisible = false;
+
+// Toggle mostra/nascondi grafici
+function toggleCharts() {
+    console.log('[toggleCharts] Toggle pressed');
+    const btn = document.getElementById('toggleChartsBtn');
+    const toolbar = document.getElementById('chartsToolbar');
+    const previewColumns = document.querySelectorAll('.preview-column');
+
+    chartsVisible = !chartsVisible;
+
+    if (chartsVisible) {
+        // Mostra grafici
+        btn.classList.remove('btn-outline-primary');
+        btn.classList.add('btn-primary');
+        btn.innerHTML = '<i class="bi bi-graph-up me-2"></i>Nascondi Anteprima Grafici';
+        toolbar.classList.remove('d-none');
+
+        previewColumns.forEach(col => col.classList.remove('d-none'));
+
+        // Carica tutti i grafici
+        const rows = document.querySelectorAll('tbody tr[data-gaia-id]');
+        rows.forEach(row => {
+            const gaiaId = row.getAttribute('data-gaia-id');
+            if (gaiaId) {
+                loadPreviewChart(gaiaId);
+            }
+        });
+    } else {
+        // Nascondi grafici
+        btn.classList.add('btn-outline-primary');
+        btn.classList.remove('btn-primary');
+        btn.innerHTML = '<i class="bi bi-graph-up me-2"></i>Mostra Anteprima Grafici';
+        toolbar.classList.add('d-none');
+
+        previewColumns.forEach(col => col.classList.add('d-none'));
+    }
+}
+
+// Aggiorna larghezza e altezza grafici quando cambia il parametro
+function updateChartDimensions() {
+    const width = document.getElementById('chartWidth')?.value || 300;
+    const previewCells = document.querySelectorAll('td.preview-column');
+
+    previewCells.forEach(cell => {
+        const plotDiv = cell.querySelector('[id^="plot-"]');
+        if (plotDiv) {
+            plotDiv.style.width = width + 'px';
+            // Trigger Plotly resize
+            const gaiaId = plotDiv.id.replace('plot-', '');
+            Plotly.Plots.resize(plotDiv);
+        }
+    });
+}
+
+// Funzione per caricare dati Arrow e renderizzare il grafico
+async function loadPreviewChart(gaiaId) {
+    console.log(`[loadPreviewChart] Inizio caricamento per ${gaiaId}`);
+    const plotDiv = document.getElementById(`plot-${gaiaId}`);
+
+    // Pulisci il contenitore prima di renderizzare
+    plotDiv.innerHTML = '';
+
+    const maxPoints = document.getElementById('previewMaxPoints').value || 300;
+
+    try {
+        // Carica dati Arrow dal server
+        const response = await fetch(`/agata/admin/api/stars-catalog/${gaiaId}/preview-data.arrow?max_points=${maxPoints}`);
+
+        if (!response.ok) {
+            plotDiv.innerHTML = '<small class="text-danger">Errore caricamento dati</small>';
+            return;
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+
+        // Carica Arrow se disponibile
+        if (typeof window.Arrow === 'undefined') {
+            plotDiv.innerHTML = '<small class="text-muted">Arrow non disponibile</small>';
+            return;
+        }
+
+        // Parse Arrow IPC stream
+        const table = window.Arrow.tableFromIPC(new Uint8Array(arrayBuffer));
+
+        // Estrai colonne
+        const hjdArray = table.getChild('hjd').toArray();
+        const magArray = table.getChild('mag').toArray();
+
+        if (hjdArray.length === 0) {
+            plotDiv.innerHTML = '<small class="text-muted">Nessun dato</small>';
+            return;
+        }
+
+        // Converti in array JavaScript
+        const hjd = Array.from(hjdArray);
+        const mag = Array.from(magArray);
+
+        // Normalizza magnitudine (inverta per mostrare magnitudini più luminose in basso)
+        const magMin = Math.min(...mag);
+        const magMax = Math.max(...mag);
+        const magNorm = mag.map(m => magMax - (m - magMin)); // Inverte per vedere stelle luminose in basso
+
+        // Crea trace Plotly
+        const trace = {
+            x: hjd,
+            y: mag,
+            mode: 'markers',
+            type: 'scatter',
+            marker: {
+                size: 4,
+                color: 'rgba(52, 152, 219, 0.6)',
+                opacity: 0.7
+            },
+            hovertemplate: '<b>JD:</b> %{x:.2f}<br><b>Mag:</b> %{y:.3f}<extra></extra>'
+        };
+
+        // Layout compatto
+        const layout = {
+            margin: { t: 5, b: 25, l: 35, r: 5 },
+            xaxis: {
+                title: { text: 'JD', font: { size: 10 } },
+                tickfont: { size: 9 },
+                showgrid: true,
+                gridwidth: 1,
+                gridcolor: '#e0e0e0'
+            },
+            yaxis: {
+                title: { text: 'Mag', font: { size: 10 } },
+                tickfont: { size: 9 },
+                showgrid: true,
+                gridwidth: 1,
+                gridcolor: '#e0e0e0',
+                autorange: 'reversed'  // Magnitudini: più basso = più luminoso
+            },
+            plot_bgcolor: 'rgba(255, 255, 255, 0.7)',
+            paper_bgcolor: 'white',
+            hovermode: 'closest',
+            dragmode: 'zoom'
+        };
+
+        const config = {
+            responsive: true,
+            displayModeBar: false,  // Nascondi toolbar Plotly per compattezza
+            staticPlot: false
+        };
+
+        // Renderizza con Plotly
+        if (typeof Plotly === 'undefined') {
+            plotDiv.innerHTML = '<small class="text-danger">Plotly non disponibile</small>';
+            return;
+        }
+        Plotly.newPlot(`plot-${gaiaId}`, [trace], layout, config);
+
+    } catch (error) {
+        plotDiv.innerHTML = `<small class="text-danger">Errore: ${error.message}</small>`;
+    }
+}
+
+
+// Ricarica grafici quando cambia il parametro max_points
+document.addEventListener('DOMContentLoaded', () => {
+    const maxPointsSelect = document.getElementById('previewMaxPoints');
+    const chartWidthSelect = document.getElementById('chartWidth');
+
+    if (maxPointsSelect) {
+        maxPointsSelect.addEventListener('change', () => {
+            const rows = document.querySelectorAll('tbody tr[data-gaia-id]');
+            rows.forEach(row => {
+                const gaiaId = row.getAttribute('data-gaia-id');
+                if (gaiaId) {
+                    const plotDiv = document.getElementById(`plot-${gaiaId}`);
+                    if (plotDiv) {
+                        plotDiv.innerHTML = '<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: #f5f5f5; border-radius: 4px;"><small class="text-muted">Caricamento...</small></div>';
+                        loadPreviewChart(gaiaId);
+                    }
+                }
+            });
+        });
+    }
+
+    // Listener per cambio larghezza grafici
+    if (chartWidthSelect) {
+        chartWidthSelect.addEventListener('change', () => {
+            updateChartDimensions();
+        });
+    }
+});
+</script>
+{% endblock %}

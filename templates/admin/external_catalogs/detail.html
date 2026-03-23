@@ -1,0 +1,528 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Import #{{ import_record.id }} - AGATA Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item">
+                        <a href="{{ url_for('admin.external_catalogs_page') }}">Cataloghi Esterni</a>
+                    </li>
+                    <li class="breadcrumb-item active">Import #{{ import_record.id }}</li>
+                </ol>
+            </nav>
+            <h1 class="h3 mb-0">Dettaglio Importazione</h1>
+        </div>
+        <div>
+            {% if import_record.state in ['preview', 'searching'] %}
+            <button class="btn btn-outline-danger" onclick="cancelImport()">
+                <i class="bi bi-x-circle me-2"></i>Annulla
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Info Import -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-info-circle me-2"></i>Informazioni
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-5">Stato</dt>
+                        <dd class="col-7">
+                            {% if import_record.state == 'completed' %}
+                            <span class="badge bg-success">Completato</span>
+                            {% elif import_record.state == 'preview' %}
+                            <span class="badge bg-info">Preview</span>
+                            {% elif import_record.state == 'searching' %}
+                            <span class="badge bg-warning">In corso</span>
+                            {% elif import_record.state == 'importing' %}
+                            <span class="badge bg-primary">Import in corso</span>
+                            {% elif import_record.state == 'failed' %}
+                            <span class="badge bg-danger">Fallito</span>
+                            {% elif import_record.state == 'cancelled' %}
+                            <span class="badge bg-secondary">Cancellato</span>
+                            {% else %}
+                            <span class="badge bg-light text-dark">{{ import_record.state }}</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-5">Tipo ricerca</dt>
+                        <dd class="col-7">{{ import_record.search_type }}</dd>
+
+                        <dt class="col-5">Valore</dt>
+                        <dd class="col-7">
+                            <code>{{ import_record.search_value }}</code>
+                        </dd>
+
+                        <dt class="col-5">Coordinate</dt>
+                        <dd class="col-7">
+                            {% if import_record.resolved_ra and import_record.resolved_dec %}
+                            RA: {{ "%.6f"|format(import_record.resolved_ra) }}<br>
+                            Dec: {{ "%.6f"|format(import_record.resolved_dec) }}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-5">Raggio</dt>
+                        <dd class="col-7">{{ import_record.search_radius_arcsec or 5.0 }}"</dd>
+
+                        {% if import_record.resolved_gaia_id %}
+                        <dt class="col-5">Gaia ID</dt>
+                        <dd class="col-7"><code>{{ import_record.resolved_gaia_id }}</code></dd>
+                        {% endif %}
+
+                        <dt class="col-5">Creato</dt>
+                        <dd class="col-7">{{ import_record.created_at.strftime('%d/%m/%Y %H:%M') }}</dd>
+
+                        {% if import_record.completed_at %}
+                        <dt class="col-5">Completato</dt>
+                        <dd class="col-7">{{ import_record.completed_at.strftime('%d/%m/%Y %H:%M') }}</dd>
+                        {% endif %}
+
+                        {% if import_record.project_id %}
+                        <dt class="col-5">Project</dt>
+                        <dd class="col-7">
+                            <a href="{{ url_for('admin.project_detail', project_id=import_record.project_id) }}">
+                                {{ import_record.project.project_code if import_record.project else import_record.project_id }}
+                            </a>
+                        </dd>
+                        {% endif %}
+                    </dl>
+
+                    {% if import_record.error_message %}
+                    <div class="alert alert-danger mt-3 mb-0">
+                        <small>{{ import_record.error_message }}</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Statistiche -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-bar-chart me-2"></i>Statistiche
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <h3 class="mb-0">{{ import_record.total_points_available }}</h3>
+                            <small class="text-muted">Punti Disponibili</small>
+                        </div>
+                        <div class="col-6">
+                            <h3 class="mb-0 text-success">{{ import_record.total_points_imported }}</h3>
+                            <small class="text-muted">Punti Importati</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cataloghi e Azioni -->
+        <div class="col-lg-8">
+            <!-- Risultati per Catalogo -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-database me-2"></i>Risultati per Catalogo
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if import_record.catalogs_queried %}
+                    <form id="importForm">
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px;">
+                                            {% if import_record.is_importable %}
+                                            <input type="checkbox" class="form-check-input" id="selectAll">
+                                            {% endif %}
+                                        </th>
+                                        <th>Catalogo</th>
+                                        <th>Stato</th>
+                                        <th>Punti</th>
+                                        <th>Banda</th>
+                                        <th>Note</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for catalog, info in import_record.catalogs_queried.items() %}
+                                    <tr>
+                                        <td>
+                                            {% if import_record.is_importable and info.status == 'success' and info.count > 0 %}
+                                            <input type="checkbox" class="form-check-input catalog-check"
+                                                   name="catalogs" value="{{ catalog }}">
+                                            {% endif %}
+                                        </td>
+                                        <td><strong>{{ catalog }}</strong></td>
+                                        <td>
+                                            {% if info.status == 'success' %}
+                                            <span class="badge bg-success">OK</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Errore</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ info.count or 0 }}</td>
+                                        <td>{{ info.band or '-' }}</td>
+                                        <td>
+                                            {% if info.error %}
+                                            <small class="text-danger">{{ info.error }}</small>
+                                            {% elif info.time_range %}
+                                            <small class="text-muted">
+                                                JD {{ info.time_range[0]|round(1) }} - {{ info.time_range[1]|round(1) }}
+                                            </small>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {% if import_record.is_importable %}
+                        <hr>
+                        <div class="row align-items-end">
+                            <div class="col-md-6">
+                                <label class="form-label">Gaia ID per associazione dati</label>
+                                <input type="text" class="form-control" id="importGaiaId" name="gaia_id"
+                                       value="{{ import_record.resolved_gaia_id or '' }}"
+                                       placeholder="Inserisci Gaia DR3 ID" required>
+                            </div>
+                            <div class="col-md-6">
+                                <button type="submit" class="btn btn-success w-100" id="importBtn">
+                                    <i class="bi bi-download me-2"></i>Importa Dati Selezionati
+                                </button>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </form>
+                    {% else %}
+                    <p class="text-muted mb-0">Nessun risultato disponibile</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Assegnazione Stelle a Associazioni (solo superuser) -->
+            {% if is_superuser and import_record.state == 'completed' %}
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-share-fill me-2"></i>Assegna Stelle a Associazioni
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        Assegna tutte le stelle importate a una o più associazioni.
+                        Le associazioni potranno creare progetti quando decideranno di lavorarci.
+                    </p>
+                    <div id="loadingStars" class="text-center">
+                        <span class="spinner-border spinner-border-sm me-2"></span>Caricamento stelle...
+                    </div>
+                    <div id="starsContainer" style="display: none;">
+                        <div class="alert alert-info mb-4">
+                            <strong>Stelle da assegnare:</strong> <span id="starsCount">0</span>
+                        </div>
+
+                        <form id="assignStarsForm">
+                            <div class="mb-3">
+                                <label class="form-label"><strong>Seleziona associazioni:</strong></label>
+                                <div class="list-group" style="max-height: 300px; overflow-y: auto;">
+                                    {% for assoc in associations %}
+                                    <label class="list-group-item">
+                                        <input class="form-check-input association-checkbox" type="checkbox"
+                                               name="association_ids" value="{{ assoc.id }}">
+                                        <strong>{{ assoc.name }}</strong>
+                                        <small class="d-block text-muted">{{ assoc.type }}</small>
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <div class="mt-3">
+                                <button type="submit" class="btn btn-success" id="assignStarsBtn">
+                                    <i class="bi bi-check-circle me-2"></i>Assegna Tutte le Stelle
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Progetti cancellati (info storica) -->
+            {% if cancelled_projects %}
+            <div class="card mt-3 border-secondary">
+                <div class="card-header bg-light">
+                    <h6 class="card-title mb-0">
+                        <i class="bi bi-archive me-2"></i>Progetti Cancellati ({{ cancelled_projects|length }})
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-2">
+                        Progetti precedentemente creati per questo Gaia ID e poi cancellati:
+                    </p>
+                    <ul class="list-unstyled mb-0">
+                        {% for proj in cancelled_projects %}
+                        <li class="mb-2">
+                            <span class="badge bg-secondary">{{ proj.project_code }}</span>
+                            <small class="text-muted ms-2">
+                                {{ proj.title or 'Senza titolo' }} -
+                                cancellato il {{ proj.cancelled_at.strftime('%d/%m/%Y') if proj.cancelled_at else 'N/A' }}
+                            </small>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Link a gestione stella (se completato e con gaia_id) -->
+            {% if import_record.state == 'completed' and import_record.resolved_gaia_id %}
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-star me-2"></i>Gestione Stella
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        Per visualizzare, gestire o cancellare i dati fotometrici di questa stella,
+                        vai alla pagina dedicata nel Catalogo Stelle.
+                    </p>
+                    <a href="{{ url_for('admin.star_detail', gaia_id=import_record.resolved_gaia_id) }}"
+                       class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-right me-2"></i>Vai al Dettaglio Stella
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Select all checkbox
+    const selectAll = document.getElementById('selectAll');
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            document.querySelectorAll('.catalog-check').forEach(cb => {
+                cb.checked = this.checked;
+            });
+        });
+    }
+
+    // Import form - usa endpoint dedicati per ogni catalogo
+    const importForm = document.getElementById('importForm');
+    if (importForm) {
+        importForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(importForm);
+            const catalogs = formData.getAll('catalogs');
+            const gaiaId = formData.get('gaia_id');
+
+            if (catalogs.length === 0) {
+                alert('Seleziona almeno un catalogo');
+                return;
+            }
+
+            if (!gaiaId) {
+                alert('Inserisci un Gaia ID');
+                return;
+            }
+
+            const importBtn = document.getElementById('importBtn');
+            importBtn.disabled = true;
+            importBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Import in corso...';
+
+            // Mappa nomi catalogo agli endpoint
+            const catalogEndpoints = {
+                'TESS': 'tess',
+                'ZTF': 'ztf',
+                'ASAS-SN': 'asassn',
+                'OGLE': 'ogle'
+            };
+
+            let totalImported = 0;
+            let errors = [];
+            let projectCreated = null;
+
+            try {
+                // Import sequenziale per ogni catalogo selezionato
+                for (const catalog of catalogs) {
+                    const endpoint = catalogEndpoints[catalog] || catalog.toLowerCase();
+                    const url = `/agata/admin/api/catalogs/${endpoint}/import/{{ import_record.id }}`;
+
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ gaia_id: gaiaId })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        totalImported += result.points_imported || 0;
+                        if (result.project_created) {
+                            projectCreated = result.project_code;
+                        }
+                    } else {
+                        errors.push(`${catalog}: ${result.error}`);
+                    }
+                }
+
+                // Mostra risultato
+                if (totalImported > 0) {
+                    let msg = 'Importati ' + totalImported + ' punti fotometrici';
+                    if (projectCreated) {
+                        msg += '\n\nCreato automaticamente progetto ' + projectCreated;
+                    }
+                    if (errors.length > 0) {
+                        msg += '\n\nAvvisi:\n' + errors.join('\n');
+                    }
+                    alert(msg);
+                    location.reload();
+                } else if (errors.length > 0) {
+                    alert('Errori durante l\'import:\n' + errors.join('\n'));
+                    importBtn.disabled = false;
+                    importBtn.innerHTML = '<i class="bi bi-download me-2"></i>Importa Dati Selezionati';
+                } else {
+                    alert('Nessun dato importato');
+                    importBtn.disabled = false;
+                    importBtn.innerHTML = '<i class="bi bi-download me-2"></i>Importa Dati Selezionati';
+                }
+            } catch (error) {
+                alert('Errore: ' + error.message);
+                importBtn.disabled = false;
+                importBtn.innerHTML = '<i class="bi bi-download me-2"></i>Importa Dati Selezionati';
+            }
+        });
+    }
+
+    // Load stars from this import
+    const starsContainer = document.getElementById('starsContainer');
+    const loadingStars = document.getElementById('loadingStars');
+    const starsCount = document.getElementById('starsCount');
+    let importedStars = [];
+
+    if (starsContainer) {
+        // Fetch stars imported in this session
+        fetch('/agata/admin/api/external-catalogs/{{ import_record.id }}/imported-stars')
+            .then(res => res.json())
+            .then(data => {
+                loadingStars.style.display = 'none';
+
+                if (data.success && data.stars && data.stars.length > 0) {
+                    importedStars = data.stars;
+                    starsCount.textContent = importedStars.length;
+                    starsContainer.style.display = 'block';
+                } else {
+                    loadingStars.innerHTML = '<span class="text-muted">Nessuna stella trovata</span>';
+                }
+            })
+            .catch(error => {
+                loadingStars.innerHTML = '<span class="text-danger">Errore: ' + error.message + '</span>';
+            });
+    }
+
+    // Assign stars form
+    const assignStarsForm = document.getElementById('assignStarsForm');
+    if (assignStarsForm) {
+        assignStarsForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            // Get selected associations
+            const assocCheckboxes = document.querySelectorAll('.association-checkbox:checked');
+            const selectedAssocs = Array.from(assocCheckboxes).map(cb => cb.value);
+
+            if (importedStars.length === 0) {
+                alert('Nessuna stella trovata');
+                return;
+            }
+
+            if (selectedAssocs.length === 0) {
+                alert('Seleziona almeno un\'associazione');
+                return;
+            }
+
+            const assignBtn = document.getElementById('assignStarsBtn');
+            assignBtn.disabled = true;
+            assignBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Assegnazione...';
+
+            try {
+                let totalAssigned = 0;
+                let errors = [];
+
+                // Per ogni associazione, assegna tutte le stelle
+                for (const associationId of selectedAssocs) {
+                    const response = await fetch('/agata/admin/api/stars/bulk-assign', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            gaia_ids: importedStars,
+                            association_id: parseInt(associationId)
+                        })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        totalAssigned += result.assigned || 0;
+                    } else {
+                        errors.push(`Associazione ${associationId}: ${result.error}`);
+                    }
+                }
+
+                if (totalAssigned > 0) {
+                    alert(`Assegnate ${importedStars.length} stella/e a ${selectedAssocs.length} associazione/i (${totalAssigned} assegnazioni totali)`);
+                    location.reload();
+                } else if (errors.length > 0) {
+                    alert('Errore durante l\'assegnazione:\n' + errors.join('\n'));
+                    assignBtn.disabled = false;
+                    assignBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Assegna Tutte le Stelle';
+                }
+            } catch (error) {
+                alert('Errore: ' + error.message);
+                assignBtn.disabled = false;
+                assignBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Assegna Tutte le Stelle';
+            }
+        });
+    }
+});
+
+async function cancelImport() {
+    if (!confirm('Vuoi cancellare questa importazione?')) return;
+
+    try {
+        const response = await fetch('/agata/admin/api/external-catalogs/{{ import_record.id }}/cancel', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({})
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            location.reload();
+        } else {
+            alert('Errore: ' + result.error);
+        }
+    } catch (error) {
+        alert('Errore: ' + error.message);
+    }
+}
+</script>
+{% endblock %}

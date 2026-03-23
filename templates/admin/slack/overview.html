@@ -1,0 +1,68 @@
+{% extends "admin/base.html" %}
+{% block title %}Slack - AGATA Admin{% endblock %}
+{% block page_title %}Integrazione Slack{% endblock %}
+{% block content %}
+<div class="row g-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-slack me-2"></i>Canali Slack per Associazione</h6>
+                {% if current_user.role == 'superuser' %}
+                <button class="btn btn-sm btn-outline-primary" onclick="testSlackConnection()">
+                    <i class="bi bi-wifi"></i> Test Connessione
+                </button>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% for assoc_id, channels in channels_by_assoc.items() %}
+                <div class="mb-4">
+                    <h6 class="text-muted">{{ channels[0].association.name if channels else 'N/A' }}</h6>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Nome Canale</th>
+                                <th>Tipo</th>
+                                <th>Channel ID</th>
+                                <th>Stato</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ch in channels %}
+                            <tr>
+                                <td><code>{{ ch.channel_name }}</code></td>
+                                <td><span class="badge bg-secondary">{{ ch.channel_type }}</span></td>
+                                <td><code class="small">{{ ch.channel_id }}</code></td>
+                                <td>
+                                    {% if ch.is_active %}
+                                    <span class="badge bg-success">Attivo</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Inattivo</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function testSlackConnection() {
+    fetch('/agata/admin/api/slack/test-connection', {method: 'POST'})
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Connessione Slack OK: ' + data.message);
+        } else {
+            alert('Errore: ' + data.error);
+        }
+    });
+}
+</script>
+{% endblock %}

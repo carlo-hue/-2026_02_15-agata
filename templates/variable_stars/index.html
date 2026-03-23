@@ -1,0 +1,1655 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AstroGen Astronomy Tools A v1.18.2</title>
+
+  <script src="{{ url_for('variable_stars.static', filename='js/plotly-2.30.0.min.js') }}"></script>
+  <script src="{{ url_for('variable_stars.static', filename='js/Arrow.es2015.min.js') }}"></script>
+
+  <link rel="stylesheet" href="{{ url_for('variable_stars.static', filename='css/common.css') }}">
+  <link rel="stylesheet" href="{{ url_for('variable_stars.static', filename='css/variable_stars.css') }}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+  <script type="module" src="{{ url_for('variable_stars.static', filename='js/variable_stars/main.js') }}"></script>
+  <style>
+    /* Variability Comparison Styles */
+    .analogues-table {
+      font-size: 0.85rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .analogues-table thead th {
+      position: sticky;
+      top: 0;
+      background: #f1f5f9;
+      z-index: 10;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.5px;
+    }
+
+    .analogues-table tbody tr:hover {
+      background: #f8fafc;
+    }
+
+    .analogues-table .analogue-checkbox {
+      cursor: pointer;
+      width: 16px;
+      height: 16px;
+    }
+
+    .loading-spinner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      color: #64748b;
+      font-size: 0.9rem;
+    }
+
+    .loading-spinner::before {
+      content: "⏳";
+      margin-right: 0.5rem;
+      animation: spin 2s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .info-box {
+      padding: 0.75rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+  </style>
+  <style>
+    .module-nav {
+      border-top: 1px solid rgba(255,255,255,0.1);
+      padding: 1rem 0;
+      margin-top: 1rem;
+    }
+
+    .module-nav-title {
+      padding: 0.75rem 1rem;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: #6c757d;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .module-nav-link {
+      display: flex;
+      align-items: center;
+      padding: 0.65rem 1rem;
+      color: #2563eb;
+      text-decoration: none;
+      transition: all 0.2s;
+      font-size: 0.95rem;
+      border-left: 3px solid transparent;
+    }
+
+    .module-nav-link:hover {
+      background: rgba(255,255,255,0.05);
+      color: #fff;
+    }
+
+    .module-nav-link.active {
+      background: rgba(76, 175, 80, 0.15);
+      color: #4caf50;
+      border-left-color: #4caf50;
+    }
+
+    .module-nav-link i {
+      margin-right: 0.75rem;
+      font-size: 1.1rem;
+      width: 20px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <!-- Hidden inputs for catalog tab -->
+  <input type="hidden" id="projectGaiaId" value="{{ project.gaia_id }}" />
+
+  <aside id="sidebar">
+    
+    <!-- ═══════════════════════════════════════════════════════════
+        HEADER
+        ═══════════════════════════════════════════════════════════ -->
+    <div class="sidebar-header">
+      <h2>⭐ AstroGen Astronomy Tools A v1.18.2</h2>
+      <div class="small" style="margin-top:8px; opacity:0.7;">AGATA</div>
+    </div>
+
+    
+    <div class="sidebar-content">
+      
+      <!-- ═══════════════════════════════════════════════════════════
+          ACCORDION SECTIONS
+          ═══════════════════════════════════════════════════════════ -->
+      
+      <!-- ══════════════════════════════════════════════════════
+          1. CARICAMENTO DATI
+          ══════════════════════════════════════════════════════ -->
+      <div class="accordion-section {% if project %}{% else %}expanded{% endif %}" data-section="data-loading">
+        <div class="accordion-header" onclick="toggleAccordionSection(this)">
+          <div class="accordion-title">
+            <span class="accordion-icon">▶</span>
+            <span>📥 Caricamento Dati</span>
+          </div>
+        </div>
+        <div class="accordion-content">
+          <div class="accordion-body">
+
+            {% if error_message %}
+            <!-- MESSAGGIO ERRORE -->
+            <div style="padding:12px; background:#fee2e2; border-left:3px solid #dc2626; border-radius:6px; margin-bottom:12px;">
+              <div style="font-weight:700; color:#7f1d1d; margin-bottom:6px;">
+                {% if error_type == 'not_found' %}
+                  🔍 Progetto Non Trovato
+                {% elif error_type == 'forbidden_association' %}
+                  🔐 Accesso Negato
+                {% elif error_type == 'forbidden_not_assigned' %}
+                  ❌ Progetto Non Assegnato
+                {% else %}
+                  ⚠️ Errore
+                {% endif %}
+              </div>
+              <div style="font-size:13px; color:#7f1d1d; line-height:1.5;">
+                {{ error_message }}
+              </div>
+              <div style="margin-top:12px;">
+                <a href="{{ url_for('admin.list_projects') }}" class="btn btn-sm" style="background:#dc2626; color:white; padding:6px 12px; border-radius:4px; text-decoration:none; display:inline-block;">
+                  ← Torna all'Admin
+                </a>
+              </div>
+            </div>
+
+            {% elif project %}
+            <!-- PROGETTO CARICATO DA ADMIN -->
+            {% if project_state == 'in_review' %}
+            <div style="padding:12px; background:#fef3c7; border-left:3px solid #f59e0b; border-radius:6px; margin-bottom:12px;">
+              <div style="font-weight:700; color:#92400e; margin-bottom:6px;">
+                ⏳ In Revisione
+              </div>
+              <div style="font-size:13px; color:#92400e;">
+                <strong>{{ project.project_code }}</strong><br>
+                {{ project.title or 'Nessun titolo' }}<br>
+                <span style="font-size:11px;">Questa stella non deve essere modificata fino alla decisione della revisione.</span>
+              </div>
+            </div>
+            {% else %}
+            <div style="padding:12px; background:#e0f2fe; border-left:3px solid #0284c7; border-radius:6px; margin-bottom:12px;">
+              <div style="font-weight:700; color:#0c4a6e; margin-bottom:6px;">
+                🎯 Progetto Assegnato
+              </div>
+              <div style="font-size:13px; color:#075985;">
+                <strong>{{ project.project_code }}</strong><br>
+                {{ project.title or 'Nessun titolo' }}<br>
+                <span style="font-size:11px; color:#64748b;">GAIA ID: {{ project.gaia_id }}</span>
+              </div>
+            </div>
+            {% endif %}
+            <!-- Hidden input con project_id e periodo -->
+            <input type="hidden" id="projectId" value="{{ project.id }}">
+            <input type="hidden" id="projectPeriod" value="{{ project.period if project.period else '' }}">
+            <!-- Loading indicator (nascosto di default) -->
+            <div id="autoLoadingIndicator" style="display:none; padding:8px; background:#f0f9ff; border-left:3px solid #3b82f6; border-radius:6px; margin-bottom:8px; font-size:12px; color:#075985;">
+              📡 Caricamento dati in corso...
+            </div>
+            <button id="load" style="width:100%;">Carica dati progetto</button>
+            <div id="autoLoadError" style="display:none; padding:8px; background:#fee2e2; border-left:3px solid #dc2626; border-radius:6px; margin-top:8px; font-size:12px; color:#7f1d1d;"></div>
+
+            {% else %}
+            <!-- NESSUN PROGETTO SPECIFICATO - MOSTRA OPZIONI -->
+
+            <!-- Origine dati -->
+            <label>Origine dati</label>
+            <select id="dataSource">
+              <option value="myprojects" selected>📋 I Miei Progetti</option>
+              <option value="synthetic">Sintetici</option>
+              {% if is_superuser or is_admin %}
+              <option value="db">Database (GAIA ID)</option>
+              {% endif %}
+            </select>
+
+            <!-- I MIEI PROGETTI -->
+            <div id="myProjectsBlock" style="margin-top:8px;">
+              <label>Seleziona Progetto</label>
+              <select id="myProjectSelect" style="width:100%;">
+                <option value="">-- Carica progetti --</option>
+              </select>
+              <button id="refreshMyProjects" class="secondary" style="margin-top:6px; font-size:11px;">
+                🔄 Aggiorna lista
+              </button>
+              <div id="myProjectInfo" style="display:none; margin-top:8px; padding:8px; background:#f0f9ff; border-radius:6px; font-size:11px;">
+              </div>
+            </div>
+
+            <!-- GAIA ID (superuser e admin) -->
+            {% if is_superuser or is_admin %}
+            <div id="gaiaBlock" style="display:none; margin-top:8px;">
+              <label>GAIA ID{% if is_admin %} (Esaminazione stella){% else %} (Test/Debug){% endif %}</label>
+              <input id="gaiaId" type="text" placeholder="GAIAID1868255974288176128" {% if gaia_id %}value="{{ gaia_id }}"{% endif %} {% if is_admin and gaia_id %}readonly{% endif %}>
+              {% if is_superuser %}
+              <div style="font-size:10px; color:#dc2626; margin-top:4px;">
+                ⚠️ Solo per test - usa i progetti per il lavoro normale
+              </div>
+              {% elif is_admin %}
+              <div style="font-size:10px; color:#2563eb; margin-top:4px;">
+                💡 Usa questa modalità per esaminare stelle non ancora assegnate a progetti
+              </div>
+              {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- SINTETICI -->
+            <div id="syntheticBlock" style="display:none; margin-top:8px;">
+              <label>Tipo sintetico</label>
+              <select id="kind">
+                <option value="rrlyrae">RR Lyrae</option>
+                <option value="eclipsing">Eclissing</option>
+                <option value="delta_scuti">Delta Scuti (2 periodi)</option>
+                <option value="multiperiod">Multi-Periodo (3 periodi) ⭐</option>
+                <option value="cepheid">Cepheid</option>
+                <option value="irregular">Irregolare</option>
+              </select>
+
+              <div class="flex-row">
+                <div>
+                  <label>Seed</label>
+                  <input id="seed" type="number" value="1">
+                </div>
+                <div>
+                  <label>Sess.</label>
+                  <input id="sessions" type="number" value="6">
+                </div>
+              </div>
+            </div>
+
+            <button id="load">Carica dati</button>
+            {% endif %}
+
+          </div>
+        </div>
+      </div>
+      
+      <!-- ══════════════════════════════════════════════════════
+          2. VISUALIZZAZIONE & CONTROLLI
+          ══════════════════════════════════════════════════════ -->
+      <div class="accordion-section" data-section="visualization">
+        <div class="accordion-header" onclick="toggleAccordionSection(this)">
+          <div class="accordion-title">
+            <span class="accordion-icon">▶</span>
+            <span>👁️ Visualizzazione</span>
+          </div>
+        </div>
+        <div class="accordion-content">
+          <div class="accordion-body">
+            
+            <!-- Marker Size -->
+            <div style="margin-bottom: 12px;">
+              <label>Dimensione punti</label>
+              <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+                <input id="markerSizeNumber" type="number" min="1" max="15" step="0.5" value="3" 
+                      style="width: 60px; padding: 4px 6px;">
+                <input id="markerSizeSlider" type="range" min="1" max="15" step="0.5" value="3" 
+                      style="flex: 1;">
+              </div>
+              <div style="font-size: 10px; color: #64748b; margin-top: 4px;">
+                Modifica la grandezza dei punti nei grafici
+              </div>
+            </div>
+            
+            <!-- Detrending -->
+            <div style="margin-bottom: 12px;">
+              <label>Modello Detrend</label>
+              <select id="detrendModel" style="margin-top: 4px;">
+                <option value="none" selected>Nessuno</option>
+                <option value="linear">Lineare</option>
+                <option value="quadratic">Quadratico</option>
+              </select>
+              <button id="recalcDetrend" class="secondary" style="margin-top: 6px;">
+                Applica Detrend
+              </button>
+            </div>
+
+            <div style="margin-bottom: 8px; padding: 8px; background: #f8fafc; border-radius: 6px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="compactView" style="cursor: pointer;">
+                <span style="font-weight: 500;">📦 Vista Compatta</span>
+                <span style="font-size: 11px; color: #64748b;">(rimuove gap tra sessioni, solo visualizzazione)</span>
+              </label>
+            </div>
+            
+          </div>
+        </div>
+      </div>
+      
+      <!-- ══════════════════════════════════════════════════════
+          3. SIGMA CLIPPING & RIMOZIONI
+          ══════════════════════════════════════════════════════ -->
+      <div class="accordion-section" data-section="sigma-clipping">
+        <div class="accordion-header" onclick="toggleAccordionSection(this)">
+          <div class="accordion-title">
+            <span class="accordion-icon">▶</span>
+            <span>🔍 Sigma Clipping</span>
+          </div>
+          <span class="accordion-badge" id="outlierBadge" style="display: none;">0</span>
+        </div>
+        <div class="accordion-content">
+          <div class="accordion-body">
+            
+            <!-- Soglia σ -->
+            <div style="margin-bottom: 12px;">
+              <label>Soglia σ</label>
+              <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+                <input id="sigmaValueNumber" type="number" min="1" max="10" step="0.1" value="3"
+                      style="width: 60px; padding: 4px 6px;">
+                <input id="sigmaValue" type="range" min="1" max="10" step="0.1" value="3"
+                      style="flex: 1;">
+              </div>
+            </div>
+            
+            <button id="highlightSigmaClip" style="width: 100%; margin-bottom: 8px;">
+              🔍 Evidenzia Outlier
+            </button>
+            
+            <div id="sigmaClipInfo" style="font-size: 12px; margin-bottom: 8px;"></div>
+            <div id="sigmaClipResults" style="display: none; font-size: 11px; max-height: 200px; overflow-y: auto;"></div>
+            
+            <!-- Rimozioni -->
+            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+              <h4 style="margin: 0 0 8px 0; font-size: 13px;">Rimozioni punti</h4>
+              <div class="flex-row">
+                <button id="removeSelected" class="danger">Rimuovi</button>
+                <button id="restoreAll" class="secondary">Reset</button>
+              </div>
+            </div>
+            
+          </div>
+        </div>
+      </div>
+      
+      <!-- ══════════════════════════════════════════════════════
+          4. SESSIONI & ALLINEAMENTI
+          ══════════════════════════════════════════════════════ -->
+      <div class="accordion-section" data-section="sessions">
+        <div class="accordion-header" onclick="toggleAccordionSection(this)">
+          <div class="accordion-title">
+            <span class="accordion-icon">▶</span>
+            <span>🎯 Sessioni & Allineamenti</span>
+          </div>
+          <span class="accordion-badge info" id="sessionCountBadge">0</span>
+        </div>
+        <div class="accordion-content">
+          <div class="accordion-body">
+            
+            <!-- Tip -->
+            <div class="small" style="margin-bottom: 8px; padding: 6px; background: #f0f9ff; border-left: 3px solid #3b82f6; border-radius: 4px;">
+              💡 <strong>Tip:</strong> Shift+Click su un punto nel grafico per accedere rapidamente ai controlli della sessione
+            </div>
+            
+            <!-- Alignment controls -->
+            <div class="alignment-controls" style="margin-bottom: 12px;">
+              <div class="alignment-group">
+                <button id="alignSessionsZP" class="alignment-btn">
+                  Allinea Zero-Point
+                </button>
+              </div>
+            </div>
+            
+            <!-- Session list -->
+            <div id="sessionList" class="sessions"></div>
+            
+          </div>
+        </div>
+      </div>
+      
+      <!-- ══════════════════════════════════════════════════════
+          5. EXPORT & PERSISTENZA
+          ══════════════════════════════════════════════════════ -->
+      <div class="accordion-section" data-section="export">
+        <div class="accordion-header" onclick="toggleAccordionSection(this)">
+          <div class="accordion-title">
+            <span class="accordion-icon">▶</span>
+            <span>💾 Export & Salvataggio</span>
+          </div>
+        </div>
+        <div class="accordion-content">
+          <div class="accordion-body">
+            
+            <!-- Export Scientifico -->
+            <div style="margin-bottom: 16px;">
+              <h4 style="margin: 0 0 8px 0; font-size: 13px;">Export Scientifico</h4>
+              <button id="exportDetrended" class="secondary" style="margin-bottom: 6px;">
+                📊 CSV Detrended
+              </button>
+              <button id="exportFolded" class="secondary" style="margin-bottom: 6px;">
+                📈 CSV Folded
+              </button>
+              <button id="exportPhasePNG" class="secondary">
+                🖼️ PNG Paper-ready
+              </button>
+              <div id="exportMsg" class="small" style="margin-top: 6px;"></div>
+            </div>
+            
+            <!-- Export/Import Progetto -->
+            <div style="margin-bottom: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+              <h4 style="margin: 0 0 8px 0; font-size: 13px;">Esporta/Importa File</h4>
+              <button id="saveFile" class="secondary" style="margin-bottom: 6px;">
+                💾 Salva Progetto
+              </button>
+              <label for="loadFileInput">
+                <button type="button" class="secondary" onclick="document.getElementById('loadFileInput').click()">
+                  📁 Carica Progetto
+                </button>
+              </label>
+              <input type="file" id="loadFileInput" accept=".json" style="display:none;">
+              <div id="fileMsg" class="small" style="margin-top: 6px;"></div>
+            </div>
+            
+            <!-- Persistenza MariaDB (nascosto di default) -->
+            <div style="display:none; padding-top: 16px; border-top: 1px solid var(--border);">
+              <h4 style="margin: 0 0 8px 0; font-size: 13px;">Persistenza (MariaDB)</h4>
+              <div class="flex-row">
+                <button id="saveState" class="secondary">Salva</button>
+                <button id="loadState" class="secondary">Carica</button>
+              </div>
+              <div id="stateMsg" class="small" style="margin-top: 6px;"></div>
+            </div>
+            
+          </div>
+        </div>
+      </div>
+      
+      <!-- ═══════════════════════════════════════════════════════════
+        MODULI NAVIGAZIONE
+        ═══════════════════════════════════════════════════════════ -->
+      <div class="module-nav-title">Moduli Principali</div>
+      <a href="{{ url_for('admin.list_projects') }}" class="module-nav-link">
+        <i class="bi bi-house-door"></i>
+        Admin
+      </a>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+        TOGGLE BUTTON
+        ═══════════════════════════════════════════════════════════ -->
+    <button class="toggle-btn" onclick="toggleSidebar()" title="Nascondi/Mostra controlli">☰</button>
+
+  </aside>
+  <!-- ══════════════════════════════════════════════════════
+          MAIN
+          ══════════════════════════════════════════════════════ -->
+  <main>
+    <nav class="tab-nav">
+      <button class="tab-btn active" onclick="switchTab(event, 'tab-lc')">Curva di Luce</button>
+      <button class="tab-btn" onclick="switchTab(event, 'tab-period')">Periodogramma</button>
+      <button class="tab-btn" onclick="switchTab(event, 'tab-phase')">Analisi in Fase</button>
+      <button class="tab-btn" onclick="switchTab(event, 'tab-comparison')">📊 Analisi di Supporto</button>
+      <button class="tab-btn" onclick="switchTab(event, 'tab-ai')">🤖 AI Advisor</button>
+      <button class="tab-btn" onclick="switchTab(event, 'tab-history')">History</button>
+      <button class="tab-btn" onclick="switchTab(event, 'tab-catalogs')">🔭 Cataloghi</button>
+      <button class="tab-btn" onclick="switchTab(event, 'tab-import-catalogs')">📥 Import Cataloghi</button>
+      {% if is_superuser %}
+      <button class="tab-btn" onclick="switchTab(event, 'tab-harmonics')" style="opacity: 0.7; font-size: 0.85rem;">old1 Armoniche</button>
+      <button class="tab-btn" onclick="switchTab(event, 'tab-oc')" style="opacity: 0.7; font-size: 0.85rem;">old2 O-C Diagram</button>
+      {% endif %}
+      {% if project_state == 'in_review' %}
+      <span style="display: flex; align-items: center; margin-left: auto; padding: 0.5rem 0.75rem; background: #fef3c7; color: #92400e; border-radius: 4px; font-size: 0.85rem; font-weight: 600;">
+        ⏳ In Revisione
+      </span>
+      {% endif %}
+    </nav>
+    <div id="tab-lc" class="tab-panel active">
+      <div class="plot-card">
+        <div id="plotLC" style="width:100%; height:100%;"></div>
+      </div>
+    </div>
+    <div id="tab-period" class="tab-panel">
+      <div class="plot-card" style="display: flex; flex-direction: column; overflow-y: auto; max-height: calc(100vh - 200px);">
+        <!-- Prima riga: controlli + periodi trovati -->
+        <div style="padding: 12px; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;">
+          <div style="width: 90px;"><label style="font-size: 11px;">Min P.</label><input id="minP" type="number" value="0.1" step="0.01" style="padding: 4px; font-size: 12px;"></div>
+          <div style="width: 90px;"><label style="font-size: 11px;">Max P.</label><input id="maxP" type="number" value="15" step="0.1" style="padding: 4px; font-size: 12px;"></div>
+
+          <div style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: #f0f9ff; border-radius: 6px; border: 1px solid #3b82f6;">
+            <input type="checkbox" id="enablePrewhitening" style="cursor: pointer;">
+            <label for="enablePrewhitening" style="margin: 0; cursor: pointer; font-weight: 500; font-size: 11px;">Pre-w.</label>
+            <select id="nPeriods" style="width: 50px; padding: 2px 4px; font-size: 11px;">
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+            </select>
+          </div>
+
+          <button id="computeP" style="width: auto; padding: 6px 16px; margin: 0; font-size: 12px;">Calcola</button>
+
+          <div id="peaks" style="flex: 1; display: flex; gap: 8px; flex-wrap: wrap;"></div>
+        </div>
+
+        <!-- Grafico periodigramma -->
+        <div id="plotPeriod" style="flex: 1;"></div>
+
+        <!-- Bottone Slack dopo il grafico, piccolo a destra -->
+        <div style="padding: 8px 12px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
+          <button id="btn-slack-periodogram"
+                  title="Invia periodigramma a Slack"
+                  style="padding: 5px 10px; background: #3b82f6; color: white; border: none; border-radius: 4px; font-weight: 600; font-size: 12px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; transition: all 0.2s;">
+            💬
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: ANALISI DI SUPPORTO -->
+    <div id="tab-comparison" class="tab-panel">
+      <div class="plot-card" style="padding: 1.5rem; overflow-y: auto; max-height: calc(100vh - 200px);">
+
+        <!-- Header con bottoni Slack e Invia in Revisione -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; gap: 1rem;">
+          <div style="flex: 1;">
+            <h3 style="margin: 0 0 0.5rem 0; font-size: 1.25rem; color: #1e293b;">
+              📊 Analisi di Supporto - Preparazione AAVSO/VSX
+            </h3>
+            <p style="margin: 0; color: #64748b; font-size: 0.9rem; line-height: 1.5;">
+              Compila i parametri della stella variabile per preparare il documento di invio ad AAVSO/VSX.
+              Usa il Knowledge Base per verificare la completezza dei dati.
+            </p>
+          </div>
+          <div style="display: flex; gap: 0.75rem; white-space: nowrap;">
+            <button id="btn-slack-support-analysis"
+                    title="Invia analisi di supporto (dati formattati) a Slack"
+                    style="padding: 0.6rem 1.2rem; background: #3b82f6; color: white; border: none; border-radius: 6px; font-weight: 600; font-size: 0.95rem; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s;">
+              💬 Invia a Slack
+            </button>
+            <button id="btn-invia-revisione"
+                    title="Valida i dati e invia il progetto in revisione"
+                    {% if project_state == 'in_review' %}disabled{% endif %}
+                    style="padding: 0.6rem 1.2rem; background: {% if project_state == 'in_review' %}#cbd5e1{% else %}#16a34a{% endif %}; color: {% if project_state == 'in_review' %}#64748b{% else %}white{% endif %}; border: none; border-radius: 6px; font-weight: 600; font-size: 0.95rem; cursor: {% if project_state == 'in_review' %}not-allowed{% else %}pointer{% endif %}; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s;">
+              {% if project_state == 'in_review' %}✓ Già in Revisione{% else %}📤 Invia in Revisione{% endif %}
+            </button>
+          </div>
+        </div>
+
+        {% if project_state == 'in_review' %}
+        <!-- Banner di avviso revisione -->
+        <div id="review-banner" style="background:#fef3c7; border-left:4px solid #f59e0b; padding:12px; border-radius:6px; margin-bottom:1rem;">
+          <strong style="color:#92400e;">⏳ Stella in Revisione</strong>
+          <span style="color:#92400e; font-size:0.9rem;"> — Questa stella è stata inviata in revisione. Non modificare i dati fino alla decisione.</span>
+        </div>
+        {% endif %}
+
+        <!-- Sezione 1: Informazioni Base (auto-popolate) -->
+        <section class="support-section">
+          <h4>📍 Informazioni Base</h4>
+          <div class="info-grid readonly">
+            <div class="info-item">
+              <label>Nome Progetto:</label>
+              <span id="info-project-name">-</span>
+            </div>
+            <div class="info-item">
+              <label>Gaia ID:</label>
+              <span id="info-gaia-id">-</span>
+            </div>
+            <div class="info-item">
+              <label>Coordinate (RA, Dec):</label>
+              <span id="info-coords">-</span>
+            </div>
+            <div class="info-item">
+              <div style="display: flex; align-items: flex-end; gap: 0.5rem;">
+                <div style="flex: 1;">
+                  <label>Periodo (dall'analisi in fase):</label>
+                  <span id="info-period" style="display: block;">-</span>
+                </div>
+                <button type="button" id="sync-phase-to-support" class="btn-sync-small" title="Sincronizza periodo, ampiezza ed epoch">🔄</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Sezione 2: Parametri Fisici (editabili) -->
+        <section class="support-section">
+          <h4 style="margin: 0 0 1rem 0;">🔬 Parametri Fisici Stella</h4>
+          <form id="support-form" class="support-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="spectral_class">Classe Spettrale:</label>
+                <input type="text" id="spectral_class" placeholder="es: G2V, M3III">
+              </div>
+              <div class="form-group">
+                <label for="teff">Teff (K):</label>
+                <input type="text" id="teff" placeholder="es: 5778">
+              </div>
+              <div class="form-group">
+                <label for="distance">Distanza (pc):</label>
+                <input type="text" id="distance" placeholder="es: 10.5">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="luminosity">Luminosità (L☉):</label>
+                <input type="text" id="luminosity" placeholder="es: 1.0">
+              </div>
+              <div class="form-group">
+                <label for="radius">Raggio (R☉):</label>
+                <input type="text" id="radius" placeholder="es: 1.0">
+              </div>
+              <div class="form-group">
+                <label for="mass">Massa (M☉):</label>
+                <input type="text" id="mass" placeholder="es: 1.0">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="color_bv">Colore B-V:</label>
+                <input type="text" id="color_bv" placeholder="es: 0.656">
+              </div>
+              <div class="form-group">
+                <label for="color_bprp">Colore BP-RP:</label>
+                <input type="text" id="color_bprp" placeholder="es: 1.234">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group full-width">
+                <label for="variable_type">Tipo di Variabile Proposta:</label>
+                <select id="variable_type" required>
+                  <option value="">-- Seleziona tipo --</option>
+                  <option value="RR Lyrae">RR Lyrae</option>
+                  <option value="RRab">RR Lyrae - RRab</option>
+                  <option value="RRc">RR Lyrae - RRc</option>
+                  <option value="RRd">RR Lyrae - RRd</option>
+                  <option value="Classical Cepheid">Classical Cepheid</option>
+                  <option value="Type I Cepheid">Type I Cepheid (F - P Cepheid)</option>
+                  <option value="Type II Cepheid">Type II Cepheid</option>
+                  <option value="Delta Scuti">Delta Scuti</option>
+                  <option value="SX Phoenicis">SX Phoenicis</option>
+                  <option value="Long-Period Variable">Long-Period Variable</option>
+                  <option value="Mira">Mira (Long-Period)</option>
+                  <option value="Semi-Regular">Semi-Regular Variable</option>
+                  <option value="Irregular">Irregular Variable</option>
+                  <option value="EA">Eclipsing Binary - EA (Algol-type)</option>
+                  <option value="EB">Eclipsing Binary - EB (β Lyrae-type)</option>
+                  <option value="EW">Eclipsing Binary - EW (W UMa-type)</option>
+                  <option value="Rotational">Rotational Variable</option>
+                  <option value="BY Draconis">BY Draconis</option>
+                  <option value="SB">Short-Period Binary</option>
+                  <option value="other">Altro</option>
+                </select>
+                <!-- Campo testo per "Altro" -->
+                <input type="text" id="variable_type_custom" placeholder="Specifica il tipo di variabile" style="display: none; margin-top: 0.5rem;">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group full-width">
+                <label for="catalog_identifiers">Identificatori Altri Cataloghi (uno per riga):</label>
+                <textarea id="catalog_identifiers" rows="4" placeholder="es: VSX J123456.7+123456&#10;ASASSN-V J123456.78+123456.7&#10;TYC 1234-5678-1"></textarea>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="variability_amplitude">Ampiezza Variabilità (mag):</label>
+                <input type="number" id="variability_amplitude" step="0.001" placeholder="es: 0.5">
+              </div>
+              <div class="form-group">
+                <label for="passband">Passband:</label>
+                <input type="text" id="passband" placeholder="es: V, G, R">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="epoch">Epoch (JD):</label>
+                <input type="number" id="epoch" step="0.00001" placeholder="es: 2459000.12345">
+                <small style="color: #6c757d; font-size: 0.8rem;">Tempo di massimo/minimo per stelle periodiche</small>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" id="save-support-data" class="btn-primary">💾 Salva Dati</button>
+              <button type="button" id="reset-support-form" class="btn-secondary">🔄 Reset</button>
+            </div>
+          </form>
+        </section>
+
+        <!-- Sezione 3: Query LLM Knowledge Base -->
+        <section class="support-section kb-query-section">
+          <h4>🤖 Validazione con Knowledge Base</h4>
+          <div class="kb-query-container">
+            <div class="form-group">
+              <label for="kb-query-input">Domanda per AGATA KB:</label>
+              <textarea id="kb-query-input" rows="3" placeholder="Scrivi la tua domanda..."></textarea>
+            </div>
+            <div class="kb-suggested-queries">
+              <button type="button" class="btn-suggestion" data-query="Quali sono i parametri necessari per inviare un documento a AAVSO/VSX per una stella variabile?">
+                💡 Parametri AAVSO/VSX
+              </button>
+              <button type="button" class="btn-suggestion" data-query="Come verificare se i dati compilati per una stella variabile sono corretti e completi?">
+                ✅ Verifica Dati
+              </button>
+              <button type="button" class="btn-suggestion" data-query="Quali informazioni sono obbligatorie per la classificazione di una stella variabile?">
+                📋 Info Obbligatorie
+              </button>
+              <button type="button" id="validate-with-context-btn" class="btn-suggestion" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; font-weight: 600;">
+                🎯 Valida i Miei Dati
+              </button>
+            </div>
+            <div class="kb-query-actions">
+              <button type="button" id="ask-kb-btn" class="btn-primary">🔍 Chiedi a KB</button>
+            </div>
+            <div id="kb-response-container" class="kb-response" style="display: none;">
+              <h5>Risposta Knowledge Base:</h5>
+              <div id="kb-response-text"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Sezione 4: Ricerca Stelle Analoghe VSX (collassabile) -->
+        <details class="support-section collapsible">
+          <summary style="cursor: pointer; user-select: none;">
+            <h4 style="display: inline;">🔍 Ricerca Stelle Analoghe VSX</h4>
+          </summary>
+
+          <!-- CONTENUTO ESISTENTE RICERCA VSX -->
+          <div style="margin-top: 1rem;">
+            <p style="margin: 0 0 1rem 0; color: #64748b; font-size: 0.9rem; line-height: 1.5;">
+              Trova stelle variabili simili alla tua interrogando il catalogo <strong>VSX (AAVSO Variable Star Index)</strong>.
+              La ricerca usa periodo, magnitudine e coordinate per trovare stelle con parametri simili.
+            </p>
+
+            <!-- Error/Success Messages -->
+            <div id="variabilityComparisonError"></div>
+
+            <!-- Ricerca Stelle Analoghe -->
+            <div class="comparison-section" style="margin-bottom: 2rem; padding: 1rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h4 style="margin: 0; font-size: 1rem; color: #334155;">
+                  1️⃣ Ricerca Stelle Analoghe
+                </h4>
+                <button id="searchAnaloguesBtn" class="btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                  🔍 Cerca Analoghe
+                </button>
+              </div>
+
+              <div style="font-size: 0.85rem; color: #64748b; margin-bottom: 1rem;">
+                La ricerca usa i periodi trovati nel periodogramma e i parametri stellari (colore, magnitudine, temperatura)
+                per trovare stelle simili. Similarità calcolata con distanza euclidea normalizzata.
+              </div>
+
+              <!-- Parametri ricerca VSX -->
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; padding: 0.75rem; background: white; border-radius: 6px; margin-bottom: 1rem;">
+
+                <!-- Max risultati -->
+                <div>
+                  <label style="font-size: 0.75rem; color: #64748b; display: block; margin-bottom: 4px;">Max Risultati</label>
+                  <input type="number" id="topN" value="10" min="5" max="50" style="width: 100%; padding: 6px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                  <small style="font-size: 0.7rem; color: #94a3b8;">Numero massimo stelle da mostrare</small>
+                </div>
+
+                <!-- MAGNITUDINE MINIMA (range) -->
+                <div style="grid-column: span 2;">
+                  <label style="font-size: 0.75rem; color: #64748b; display: block; margin-bottom: 4px; font-weight: 600;">📉 Magnitudine Minima (range)</label>
+                  <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <input type="number" id="minMagMin" value="" step="0.01" placeholder="min" style="flex: 1; padding: 6px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                    <span style="color: #94a3b8;">—</span>
+                    <input type="number" id="minMagMax" value="" step="0.01" placeholder="max" style="flex: 1; padding: 6px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                  </div>
+                  <small style="font-size: 0.7rem; color: #94a3b8;">Range magnitudine minima (dalla fase)</small>
+                </div>
+
+                <!-- MAGNITUDINE MASSIMA (range) -->
+                <div style="grid-column: span 2;">
+                  <label style="font-size: 0.75rem; color: #64748b; display: block; margin-bottom: 4px; font-weight: 600;">📈 Magnitudine Massima (range)</label>
+                  <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <input type="number" id="maxMagMin" value="" step="0.01" placeholder="min" style="flex: 1; padding: 6px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                    <span style="color: #94a3b8;">—</span>
+                    <input type="number" id="maxMagMax" value="" step="0.01" placeholder="max" style="flex: 1; padding: 6px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                  </div>
+                  <small style="font-size: 0.7rem; color: #94a3b8;">Range magnitudine massima (dalla fase)</small>
+                </div>
+
+                <!-- PERIODO (range) -->
+                <div style="grid-column: span 2;">
+                  <label style="font-size: 0.75rem; color: #64748b; display: block; margin-bottom: 4px; font-weight: 600;">🔄 Periodo (range giorni)</label>
+                  <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <input type="number" id="periodMin" value="" step="0.001" placeholder="min" style="flex: 1; padding: 6px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                    <span style="color: #94a3b8;">—</span>
+                    <input type="number" id="periodMax" value="" step="0.001" placeholder="max" style="flex: 1; padding: 6px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                  </div>
+                  <small style="font-size: 0.7rem; color: #94a3b8;">Range periodo (dal periodogramma)</small>
+                </div>
+
+                <!-- Tipo variabile -->
+                <div>
+                  <label style="font-size: 0.75rem; color: #64748b; display: block; margin-bottom: 4px;">⭐ Tipo Variabile</label>
+                  <input type="text" id="varType" value="" placeholder="es: RRAB, EA, DSCT" style="width: 100%; padding: 6px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                  <small style="font-size: 0.7rem; color: #94a3b8;">Abbreviazione GCVS (opzionale)</small>
+                </div>
+
+                <!-- Classe spettrale -->
+                <div>
+                  <label style="font-size: 0.75rem; color: #64748b; display: block; margin-bottom: 4px;">🌟 Classe Spettrale</label>
+                  <input type="text" id="specType" value="" placeholder="es: G2V, M3III" style="width: 100%; padding: 6px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                  <small style="font-size: 0.7rem; color: #94a3b8;">Classe spettrale (opzionale)</small>
+                </div>
+
+              </div>
+
+              <!-- Bottone "Copia dai dati stella" -->
+              <div style="margin-bottom: 1rem; padding: 0.75rem; background: #f0f9ff; border-radius: 6px; border: 1px solid #bae6fd;">
+                <button type="button" id="copyFromStarBtn" class="btn-secondary" style="width: 100%; padding: 0.5rem; font-size: 0.9rem; background: #3b82f6; color: white;">
+                  📋 Copia parametri dalla stella corrente
+                </button>
+                <small style="font-size: 0.7rem; color: #075985; display: block; margin-top: 4px; text-align: center;">
+                  Popola automaticamente i campi con i dati del progetto caricato
+                </small>
+              </div>
+
+              <!-- Risultati ricerca -->
+              <div id="analoguesResults"></div>
+            </div>
+
+            <!-- Admin: Clear Cache -->
+            {% if is_superuser or is_admin %}
+            <div class="comparison-section" style="padding: 1rem; background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <h4 style="margin: 0 0 0.25rem 0; font-size: 0.9rem; color: #92400e;">
+                    🧹 Cache Management (Admin)
+                  </h4>
+                  <div style="font-size: 0.8rem; color: #92400e;">
+                    Pulisci cache Redis per forzare nuova query cataloghi
+                  </div>
+                </div>
+                <button id="clearCacheBtn" class="btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.85rem; background: #f59e0b; color: white;">
+                  Pulisci Cache
+                </button>
+              </div>
+            </div>
+            {% endif %}
+
+          </div>
+        </details>
+
+      </div>
+    </div>
+
+    <div id="tab-phase" class="tab-panel">
+      <div class="phase-layout">
+        
+        <!-- Controlli compatti sopra -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          
+          <!-- COLONNA SINISTRA: Controllo Periodo -->
+          <div style="background: white; border: 1px solid var(--border); border-radius: 8px; padding: 10px;">
+            
+            <!-- Header -->
+            <div style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">
+              📐 Periodo & Fine-Tuning
+            </div>
+            
+            <!-- Prima riga: Periodo principale -->
+            <div style="display: flex; gap: 4px; align-items: center; margin-bottom: 6px;">
+              <button id="halfPeriod" style="padding: 3px 8px; font-size: 10px; min-width: 28px; border: 1px solid var(--border); background: white; border-radius: 4px; cursor: pointer; font-weight: 600;">÷2</button>
+              <input id="chosenP" type="number" step="0.000001" placeholder="es: 0.567890" 
+                    style="flex: 1; padding: 4px 6px; font-size: 12px; border: 1px solid var(--border); border-radius: 4px;">
+              <button id="doublePeriod" style="padding: 3px 8px; font-size: 10px; min-width: 28px; border: 1px solid var(--border); background: white; border-radius: 4px; cursor: pointer; font-weight: 600;">×2</button>
+            </div>
+            
+            <!-- Seconda riga: Fine-tuning -->
+            <div style="display: flex; gap: 3px; align-items: center; background: #f8fafc; padding: 4px 6px; border-radius: 4px;">
+              <span style="font-size: 8px; color: #64748b; font-weight: 600; min-width: 32px;">FINE:</span>
+              <button id="periodMinusBig" style="padding: 2px 4px; font-size: 9px; border: 1px solid #cbd5e1; background: white; border-radius: 3px; cursor: pointer; min-width: 18px;">◄◄</button>
+              <button id="periodMinus" style="padding: 2px 4px; font-size: 9px; border: 1px solid #cbd5e1; background: white; border-radius: 3px; cursor: pointer; min-width: 18px;">◄</button>
+              <input id="periodSlider" type="range" min="-100" max="100" value="0" step="1"
+                    style="flex: 1; height: 16px; margin: 0; cursor: pointer;">
+              <button id="periodPlus" style="padding: 2px 4px; font-size: 9px; border: 1px solid #cbd5e1; background: white; border-radius: 3px; cursor: pointer; min-width: 18px;">►</button>
+              <button id="periodPlusBig" style="padding: 2px 4px; font-size: 9px; border: 1px solid #cbd5e1; background: white; border-radius: 3px; cursor: pointer; min-width: 18px;">►►</button>
+              <span style="font-size: 8px; color: #64748b; font-weight: 600;">ΔP:</span>
+              <input id="periodDelta" type="number" step="0.000001" value="0.0001"
+                    style="width: 65px; padding: 2px 4px; font-size: 10px; border: 1px solid var(--border); border-radius: 3px;">
+              <button id="periodReset" style="padding: 2px 4px; font-size: 9px; border: 1px solid #fca5a5; background: #fee2e2; color: #dc2626; border-radius: 3px; cursor: pointer; min-width: 18px; font-weight: 700;">↻</button>
+            </div>
+
+            <!-- Terza riga: Blocca zoom -->
+            <div style="display: flex; align-items: center; gap: 4px; margin-top: 6px; padding: 3px 6px; background: #f0f9ff; border-radius: 4px; border: 1px solid #bae6fd;">
+              <input type="checkbox" id="lockPhaseZoom" style="cursor: pointer; margin: 0;">
+              <label for="lockPhaseZoom" style="font-size: 10px; color: #075985; font-weight: 600; cursor: pointer; margin: 0;">
+                🔒 Blocca Zoom
+              </label>
+            </div>
+          </div>
+          
+          <!-- COLONNA DESTRA: Sampling + Slack -->
+          <div style="background: linear-gradient(135deg, #fef3c7 0%, #fee2e2 100%); border: 2px solid #f59e0b; border-radius: 8px; padding: 10px;">
+
+            <!-- Header con bottoni -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(245, 158, 11, 0.3); gap: 6px;">
+              <span style="font-size: 10px; font-weight: 700; color: #92400e; text-transform: uppercase;">⚡ Sampling Dataset</span>
+              <button id="btn-slack-phase-analysis"
+                      title="Invia analisi in fase (PNG + dati) a Slack"
+                      style="padding: 4px 10px; background: #3b82f6; color: white; border: none; border-radius: 4px; font-weight: 700; font-size: 9px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; transition: all 0.2s;">
+                💬 Slack
+              </button>
+              <button id="finalCalc100"
+                      style="padding: 4px 10px; background: #22c55e; color: white; border: none; border-radius: 4px; font-weight: 700; font-size: 9px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap;">
+                ✓ 100%
+              </button>
+            </div>
+            
+            <!-- Slider sampling -->
+            <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 6px;">
+              <span style="font-size: 9px; color: #92400e; font-weight: 600; min-width: 38px;">Punti:</span>
+              <input type="range" id="samplingSlider" min="10" max="100" step="10" value="100"
+                    style="flex: 1; height: 16px; cursor: pointer;">
+              <span id="samplingValue" 
+                    style="min-width: 42px; font-weight: 700; color: #92400e; font-family: monospace; font-size: 13px; text-align: right;">
+                100%
+              </span>
+            </div>
+            
+            <!-- Info compatta -->
+            <div id="samplingInfo" style="font-size: 9px; color: #78350f; line-height: 1.3; padding: 3px 6px; background: rgba(254, 243, 199, 0.5); border-radius: 3px; margin-bottom: 6px;">
+              <em>Carica dati per auto-impostazione</em>
+            </div>
+            
+            <!-- Warning (nascosto di default) -->
+            <div id="samplingWarning" style="display: none; margin-top: 6px; padding: 4px 6px; background: #fee2e2; border-left: 3px solid #dc2626; border-radius: 3px; font-size: 8px; color: #7f1d1d; line-height: 1.3;">
+              ⚠️ <strong>Dataset ridotto</strong> - Premi "✓ 100%" per risultato finale
+            </div>
+          </div>
+          
+        </div>
+        
+        <!-- Grafico principale grande -->
+        <div class="phase-plot-container">
+          <div id="plotPhase"></div>
+        </div>
+
+        <!-- Altri controlli compatti -->
+        <div class="phase-controls-compact">
+          <div class="control-group">
+            <label>Etichetta</label>
+            <input id="phasePeriodLabel" type="text" placeholder="es: P=0.57 d">
+          </div>
+          
+          <div class="control-group">
+            <label>Range Fase</label>
+            <select id="phaseRange">
+              <option value="0-1">-1 → 1</option>
+              <option value="0-2">0 → 2</option>
+              <option value="-0.5-0.5">-0.5 → +0.5</option>
+            </select>
+          </div>
+          
+          <div class="control-group">
+            <label>Centra</label>
+            <input id="phaseShift" type="range" min="0" max="1" step="0.001" value="0">
+          </div>
+
+          <div class="control-group">
+            <label>Centra su</label>
+            <select id="centerOnMinMax">
+              <option value="">Manuale</option>
+              <option value="min">Minimo</option>
+              <option value="max">Massimo</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>Titolo</label>
+            <input id="phaseCustomTitle" type="text" placeholder="Analisi in Fase" value="Phase plot">
+          </div>
+
+          <button id="computePhase" class="btn-primary">Aggiorna</button>
+        </div>
+        
+        <!-- Pannello inferiore scrollabile -->
+        <div class="phase-bottom-panel">
+          
+          <!-- Statistiche fit -->
+          <div class="phase-stats-container">
+            <h4>📊 Statistiche Fit</h4>
+            <div id="phaseStats"></div>
+          </div>
+
+          <!-- Controlli Delta-P -->
+          <div class="phase-stats-container">
+            <h4>🔍 Confronto Periodi Vicini (ΔP)</h4>
+            <div class="phase-controls-compact">
+              <div class="control-group">
+                <label>ΔP (giorni)</label>
+                <input id="deltaP" type="number" step="0.0001" value="0.001">
+              </div>
+              <div class="control-group">
+                <label>Sampling %</label>
+                <input id="deltaSampling" type="number" step="0.05" min="0.05" max="1" value="0.1">
+              </div>
+              <button id="suggestDeltaP" class="btn-secondary" style="background: #8b5cf6; margin-right: 4px;" title="Suggerisce un ΔP ragionevole basato sul periodo">💡 Auto ΔP</button>
+              <button id="computeDeltaP" class="btn-secondary">Confronta</button>
+            </div>
+            
+            <!-- Griglia 4 grafici -->
+            <div id="phaseDeltaGrid" class="delta-p-grid"></div>
+          </div>
+          <div class="phase-stats-container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <h4 style="margin: 0;">📅 Effemeridi (Previsioni)</h4>
+              <button id="toggleEphemeris" class="btn-secondary" style="padding: 4px 12px; font-size: 12px;">
+                Mostra
+              </button>
+            </div>
+            <div id="ephemerisTable" style="display: none;"></div>
+          </div>
+          
+        </div>
+        
+      </div>
+    </div>
+
+
+
+    <div id="tab-harmonics" class="tab-panel">
+        <div class="plot-card harmonics-grid">
+          <!-- CONTROLLI -->
+          <div class="controls-row">
+            <div class="harmonics-input">
+              <label>Numero armoniche</label>
+              <input id="nHarmonics" type="number" min="1" max="10" value="5">
+            </div>
+            <div class="harmonics-input">
+              <label>Bin FFT</label>
+              <select id="fftBins">
+                <option value="1024">1024</option>
+                <option value="2048" selected>2048</option>
+                <option value="4096">4096</option>
+                <option value="8192">8192</option>
+              </select>
+            </div>
+            <button id="computeHarmonics" class="harmonics-btn">Calcola Armoniche</button>
+          </div>
+
+          <!-- GRAFICI -->
+          <div class="charts-row">
+            <div id="plotFFT" style="height:100%;"></div>
+            <div class="harmonics-right">
+              <div id="plotResiduals" style="flex:1; min-height:0;"></div>
+              <div id="harmonicsList">
+                <div>Armoniche</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+    <div id="tab-oc" class="tab-panel">
+      <div class="plot-card" style="display:flex; flex-direction:column;">
+
+        <div style="padding:15px; border-bottom:1px solid 
+#e2e8f0; display:flex; gap:10px; align-items:flex-end;">
+          <button id="computeOC" style="width:auto;">
+            Calcola O–C
+          </button>
+        </div>
+        <div style="width:150px;">
+          <label>Epoch (JD₀)</label>
+          <input id="ocEpoch" type="number" step="0.0001">
+        </div>
+        <div id="plotOC" style="flex:1;"></div>
+      </div>
+    </div>
+
+    <div id="tab-ai" class="tab-panel">
+      <div class="plot-card" style="display:flex; flex-direction:column; padding:20px; gap:20px;">
+
+        <!-- Header con bottone analisi -->
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:16px;">
+          <div>
+            <h2 style="margin:0; font-size:24px; font-weight:700;">🤖 AI Advisor</h2>
+            <p style="margin:4px 0 0 0; color:#64748b; font-size:14px;">Analisi intelligente con Claude AI</p>
+          </div>
+          <button id="runAIAnalysis" style="padding:10px 20px; font-size:14px; font-weight:600; background:linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border:none; color:white; border-radius:8px; cursor:pointer; box-shadow:0 2px 8px rgba(99,102,241,0.3);">
+            ✨ Analizza Ora
+          </button>
+        </div>
+
+        <!-- Loading state -->
+        <div id="aiLoadingState" style="display:none; text-align:center; padding:40px;">
+          <div style="font-size:48px; animation:spin 2s linear infinite;">🤖</div>
+          <p style="margin-top:16px; font-size:16px; color:#64748b;">Claude sta analizzando i dati...</p>
+          <div style="width:200px; height:4px; background:#e2e8f0; border-radius:2px; margin:16px auto; overflow:hidden;">
+            <div style="width:100%; height:100%; background:linear-gradient(90deg, #6366f1, #8b5cf6); animation:progress 1.5s ease-in-out infinite;"></div>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div id="aiEmptyState" style="text-align:center; padding:60px 20px;">
+          <div style="font-size:64px; margin-bottom:20px;">🔮</div>
+          <h3 style="margin:0 0 12px 0; font-size:20px; color:#1e293b;">Analisi AI non ancora eseguita</h3>
+          <p style="margin:0; color:#64748b; font-size:14px; max-width:500px; margin:0 auto;">
+            Carica dei dati e premi <strong>"Analizza Ora"</strong> per ricevere suggerimenti intelligenti su:
+          </p>
+          <ul style="text-align:left; max-width:400px; margin:20px auto; color:#64748b; font-size:14px; line-height:1.8;">
+            <li>Qualità delle sessioni osservative</li>
+            <li>Suggerimenti per pre-processing</li>
+            <li>Range ottimale per il periodigramma</li>
+            <li>Classificazione tipo di stella variabile</li>
+          </ul>
+        </div>
+
+        <!-- Results container (hidden initially) -->
+        <div id="aiResults" style="display:none; flex:1; overflow-y:auto;">
+
+          <!-- Summary card -->
+          <div id="aiSummaryCard" class="ai-card" style="background:linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border:2px solid #fbbf24; padding:16px; border-radius:12px; margin-bottom:20px;">
+            <h3 style="margin:0 0 8px 0; font-size:16px; font-weight:700; color:#92400e;">📊 Riepilogo</h3>
+            <p id="aiSummaryText" style="margin:0; color:#78350f; font-size:14px; line-height:1.6;"></p>
+          </div>
+
+          <!-- Warnings (if any) -->
+          <div id="aiWarningsCard" style="display:none; background:#fee2e2; border:2px solid #dc2626; padding:16px; border-radius:12px; margin-bottom:20px;">
+            <h3 style="margin:0 0 12px 0; font-size:16px; font-weight:700; color:#7f1d1d;">⚠️ Avvisi</h3>
+            <ul id="aiWarningsList" style="margin:0; padding-left:20px; color:#7f1d1d;"></ul>
+          </div>
+
+          <!-- Session Quality -->
+          <div class="ai-card">
+            <h3 style="margin:0 0 16px 0; font-size:18px; font-weight:700; color:#1e293b;">🎯 Qualità Sessioni</h3>
+            <div id="aiSessionQuality"></div>
+          </div>
+
+          <!-- Session Homogeneity Analysis -->
+          <div id="aiHomogeneityCard" class="ai-card" style="display:none;">
+            <h3 style="margin:0 0 16px 0; font-size:18px; font-weight:700; color:#1e293b;">🔍 Analisi Omogeneità</h3>
+            <div id="aiHomogeneity"></div>
+          </div>
+
+          <!-- Preprocessing Suggestions -->
+          <div class="ai-card">
+            <h3 style="margin:0 0 16px 0; font-size:18px; font-weight:700; color:#1e293b;">🔧 Suggerimenti Pre-processing</h3>
+            <div id="aiPreprocessing"></div>
+          </div>
+
+          <!-- Periodogram Recommendations -->
+          <div class="ai-card">
+            <h3 style="margin:0 0 16px 0; font-size:18px; font-weight:700; color:#1e293b;">📈 Raccomandazioni Periodigramma</h3>
+            <div id="aiPeriodogram"></div>
+          </div>
+
+          <!-- Variable Classification (shown only if periodogram analyzed) -->
+          <div id="aiClassificationCard" class="ai-card" style="display:none;">
+            <h3 style="margin:0 0 16px 0; font-size:18px; font-weight:700; color:#1e293b;">⭐ Classificazione Stella Variabile</h3>
+            <div id="aiClassification"></div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <div id="tab-history" class="tab-panel">
+      <div class="plot-card" style="display:flex; flex-direction:column;">
+        <div class="harmonics-input">
+          <label>History</label>
+          <input id="nHarmonics" type="number" min="1" max="10" value="5">
+        </div>
+        <div id="historyPanel"></div>
+        <button id="exportHistory" class="btn btn-sm btn-secondary mt-2">
+          Export Log
+        </button>
+        <button id="clearHistory" class="btn btn-sm btn-outline-danger mt-2">
+          Clear
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TAB: CATALOGHI
+         ═══════════════════════════════════════════════════════ -->
+    <div id="tab-catalogs" class="tab-panel">
+      <div class="plot-card" style="overflow-y: auto; max-height: calc(100vh - 200px);">
+        <!-- Header & Controls -->
+        <div style="padding: 1rem; border-bottom: 1px solid var(--border);">
+          <h3 style="margin: 0 0 1rem 0;">🔭 Interrogazione Cataloghi Esterni</h3>
+
+          <div style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1rem; flex-wrap: wrap;">
+            <!-- Gaia ID (readonly) -->
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem; color: #666;">
+                Gaia DR3 Source ID
+              </label>
+              <input
+                type="text"
+                id="catalog-gaia-id"
+                readonly
+                style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: #f5f5f5; min-width: 200px; font-family: monospace;"
+              />
+            </div>
+
+            <!-- Context Selector -->
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem; color: #666;">
+                Contesto
+              </label>
+              <select
+                id="catalog-context"
+                style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; min-width: 200px;"
+              >
+                <option value="identificativi">📋 Identificativi</option>
+                <option value="parametri_fisici">⚛️ Parametri Fisici</option>
+                <option value="magnitudine">💡 Magnitudine</option>
+                <option value="tipo_spettrale">🌈 Tipo Spettrale</option>
+                <option value="variabilita_nota">📊 Variabilità Nota</option>
+                <option value="all">🌐 Tutti i Contesti</option>
+              </select>
+            </div>
+
+            <!-- Cone Radius Input (superuser only) -->
+            {% if is_superuser %}
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem; color: #666;">
+                Raggio Cono (arcsec)
+              </label>
+              <input
+                type="number"
+                id="catalog-cone-radius"
+                min="1"
+                max="600"
+                step="0.1"
+                value="5"
+                style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; width: 120px;"
+                title="Raggio del cono di ricerca in secondi d'arco (default: 5)"
+              />
+            </div>
+            {% endif %}
+
+            <!-- Query Button -->
+            <button
+              id="catalog-query-btn"
+              style="padding: 0.5rem 1rem; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; transition: opacity 0.2s;"
+              onclick="queryCatalogs()"
+            >
+              🔍 Cerca
+            </button>
+
+            <!-- Refresh Checkbox (superuser only) -->
+            {% if is_superuser %}
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-left: auto;">
+              <input type="checkbox" id="catalog-refresh" />
+              <span style="font-size: 0.85rem; color: #666;">🔄 Force Refresh (bypass cache)</span>
+            </label>
+            {% endif %}
+          </div>
+
+          <!-- Status Message -->
+          <div id="catalog-status" style="padding: 0.75rem; border-radius: 4px; display: none; font-size: 0.9rem;"></div>
+        </div>
+
+        <!-- Results Container -->
+        <div id="catalog-results" style="padding: 1rem;">
+          <p style="color: #999; text-align: center; padding: 2rem;">
+            Seleziona un contesto dal dropdown e premi <strong>"🔍 Cerca"</strong> per interrogare i cataloghi esterni.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TAB: IMPORT CATALOGHI
+         ═══════════════════════════════════════════════════════ -->
+    <div id="tab-import-catalogs" class="tab-panel">
+      <div class="plot-card" style="overflow-y: auto; max-height: calc(100vh - 200px);">
+        <!-- Header & Controls -->
+        <div style="padding: 1rem; border-bottom: 1px solid var(--border);">
+          <h3 style="margin: 0 0 1rem 0;">📥 Download Automatico Cataloghi Fotometrici</h3>
+          <p style="margin: 0 0 1rem 0; color: #666; font-size: 0.9rem;">
+            Ricerca e importa dati fotometrici da cataloghi esterni
+          </p>
+
+          <div style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1rem; flex-wrap: wrap;">
+            <!-- Gaia ID (readonly) -->
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem; color: #666;">
+                Gaia DR3 Source ID
+              </label>
+              <input
+                type="text"
+                id="import-gaia-id"
+                readonly
+                style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: #f5f5f5; min-width: 200px; font-family: monospace;"
+              />
+            </div>
+
+            <!-- Catalog Selection (dropdown) -->
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem; color: #666;">
+                Catalogo
+              </label>
+              <select
+                id="import-catalog-select"
+                style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; min-width: 160px; background: white;"
+              >
+                <option value="TESS">TESS QLP</option>
+                <option value="ZTF">ZTF</option>
+              </select>
+            </div>
+
+            <!-- Search Button -->
+            <button
+              id="import-search-btn"
+              style="padding: 0.5rem 1rem; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; transition: opacity 0.2s;"
+              onclick="searchImportCatalogs()"
+            >
+              🔍 Cerca
+            </button>
+          </div>
+
+          <!-- Status Message -->
+          <div id="import-status" style="padding: 0.75rem; border-radius: 4px; display: none; font-size: 0.9rem;"></div>
+        </div>
+
+        <!-- Help Text -->
+        <div style="padding: 1rem; background: #f0f9ff; border-bottom: 1px solid #e0f2fe; border-radius: 4px; margin: 1rem; font-size: 0.9rem; color: #0369a1;">
+          <strong>Come funziona:</strong><br>
+          <strong>TESS QLP:</strong> Ricerca settori su MAST, poi seleziona e scarica uno per uno.<br>
+          <strong>ZTF:</strong> Scarica e importa automaticamente tutti i dati disponibili (bande g, r, i).
+        </div>
+
+        <!-- Results Container -->
+        <div id="import-results" style="padding: 1rem;">
+          <p style="color: #999; text-align: center; padding: 2rem;">
+            Inserisci un Gaia DR3 ID e premi <strong>"🔍 Cerca"</strong> per trovare settori disponibili
+          </p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+
+  <script>
+    function switchTab(evt, tabId) {
+      // disattiva tutto
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      // attiva pannello se esiste
+      const panel = document.getElementById(tabId);
+      if (!panel) {
+        console.warn(`switchTab: pannello '${tabId}' non trovato`);
+        return;
+      }
+      panel.classList.add('active');
+      // attiva bottone
+      if (evt?.currentTarget) {
+        evt.currentTarget.classList.add('active');
+      }
+      // resize Plotly solo se i plot esistono
+      const plotMap = {
+        'tab-lc': ['plotLC'],
+        'tab-period': ['plotPeriod'],
+        'tab-phase': ['plotPhase'],
+        'tab-harmonics': ['plotFFT', 'plotResiduals'],
+        'tab-oc': ['plotOC'],
+        'tab-ai': [''],
+        'tab-history': ['']
+      };
+      if (!window.Plotly || !plotMap[tabId]) return;
+      plotMap[tabId].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) Plotly.Plots.resize(el);
+      });
+    }
+
+  function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.toggle('collapsed');
+    const btn = sidebar.querySelector('.toggle-btn');
+    btn.textContent = sidebar.classList.contains('collapsed') ? '☰' : '✕';
+    btn.title = sidebar.classList.contains('collapsed') ? 'Mostra controlli' : 'Nascondi controlli';
+    
+    // Resize tutti i plot principali
+    setTimeout(() => {
+      ['plotLC', 'plotPeriod', 'plotPhase', 'plotFFT', 'plotResiduals'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) Plotly.Plots.resize(el);
+      });
+    }, 300);
+  }
+
+  const dataSourceEl = document.getElementById("dataSource");
+  const gaiaBlock = document.getElementById("gaiaBlock");
+  const syntheticBlock = document.getElementById("syntheticBlock");
+  const myProjectsBlock = document.getElementById("myProjectsBlock");
+
+  if (dataSourceEl) {
+    dataSourceEl.addEventListener("change", () => {
+      const src = dataSourceEl.value;
+      if (gaiaBlock) gaiaBlock.style.display = src === "db" ? "block" : "none";
+      if (syntheticBlock) syntheticBlock.style.display = src === "synthetic" ? "block" : "none";
+      if (myProjectsBlock) myProjectsBlock.style.display = src === "myprojects" ? "block" : "none";
+
+      // Carica progetti automaticamente quando selezionato
+      if (src === "myprojects") {
+        loadMyProjects();
+      }
+    });
+
+    // Trigger iniziale per mostrare il blocco corretto
+    // Se è stato passato un gaia_id, seleziona automaticamente "db"
+    const gaiaIdInput = document.getElementById("gaiaId");
+    const initialSrc = (gaiaIdInput && gaiaIdInput.value) ? "db" : dataSourceEl.value;
+
+    if (initialSrc !== dataSourceEl.value) {
+      dataSourceEl.value = initialSrc;
+    }
+
+    // Mostra il blocco corretto
+    if (initialSrc === "myprojects" && myProjectsBlock) {
+      myProjectsBlock.style.display = "block";
+      loadMyProjects();
+    } else if (initialSrc === "db" && gaiaBlock) {
+      gaiaBlock.style.display = "block";
+    } else if (initialSrc === "synthetic" && syntheticBlock) {
+      syntheticBlock.style.display = "block";
+    }
+  }
+
+  // ============================================
+  // GESTIONE "I MIEI PROGETTI"
+  // ============================================
+
+  async function loadMyProjects() {
+    const selectEl = document.getElementById("myProjectSelect");
+    const infoEl = document.getElementById("myProjectInfo");
+
+    if (!selectEl || !infoEl) return;
+
+    selectEl.innerHTML = '<option value="">Caricamento...</option>';
+    selectEl.disabled = true;
+    infoEl.style.display = "none";
+
+    try {
+      const response = await fetch("/agata/variable-stars/api/my-projects");
+      if (!response.ok) throw new Error("Errore caricamento");
+
+      const projects = await response.json();
+
+      if (projects.length === 0) {
+        selectEl.innerHTML = '<option value="">Nessun progetto assegnato</option>';
+        infoEl.innerHTML = '💡 Non hai progetti assegnati. Vai alla sezione Admin per assegnarti un progetto.';
+        infoEl.style.display = "block";
+      } else {
+        selectEl.innerHTML = '<option value="">-- Seleziona progetto --</option>';
+        projects.forEach(p => {
+          const opt = document.createElement("option");
+          opt.value = p.id;  // CAMBIATO: usa project_id invece di gaia_id
+          opt.dataset.projectId = p.id;
+          opt.dataset.projectCode = p.project_code;
+          opt.dataset.gaiaId = p.gaia_id;
+          opt.dataset.title = p.title;
+          opt.dataset.state = p.state;
+          opt.dataset.magnitude = p.magnitude || "";
+          opt.dataset.source = p.source || "";
+          opt.textContent = `${p.project_code} - ${p.title}`;
+          selectEl.appendChild(opt);
+        });
+        infoEl.innerHTML = `📊 ${projects.length} progett${projects.length === 1 ? 'o' : 'i'} assegnat${projects.length === 1 ? 'o' : 'i'}`;
+        infoEl.style.display = "block";
+      }
+    } catch (e) {
+      console.error("Errore caricamento progetti:", e);
+      selectEl.innerHTML = '<option value="">Errore caricamento</option>';
+      infoEl.innerHTML = '❌ Impossibile caricare i progetti. Riprova.';
+      infoEl.style.display = "block";
+    }
+
+    selectEl.disabled = false;
+  }
+
+  // Aggiorna lista progetti
+  const refreshBtn = document.getElementById("refreshMyProjects");
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", loadMyProjects);
+  }
+
+  // Mostra info progetto selezionato
+  const myProjectSelect = document.getElementById("myProjectSelect");
+  if (myProjectSelect) {
+    myProjectSelect.addEventListener("change", (e) => {
+      const infoEl = document.getElementById("myProjectInfo");
+      const opt = e.target.selectedOptions[0];
+
+      if (opt && opt.value) {
+        const mag = opt.dataset.magnitude ? `Mag: ${opt.dataset.magnitude}` : "";
+        const source = opt.dataset.source ? `Fonte: ${opt.dataset.source}` : "";
+        const state = opt.dataset.state === "assigned" ? "🔵 Assegnato" : "🟡 In revisione";
+
+        infoEl.innerHTML = `
+          <strong>${opt.dataset.projectCode}</strong><br>
+          ${opt.dataset.title || "Nessun titolo"}<br>
+          <span style="color:#64748b;">GAIA ID: ${opt.dataset.gaiaId}</span><br>
+          ${state} ${mag ? "| " + mag : ""} ${source ? "| " + source : ""}
+        `;
+        infoEl.style.display = "block";
+
+        // Memorizza il project_id selezionato
+        window.selectedProjectId = opt.dataset.projectId;
+      }
+    });
+  }
+</script>
+
+<script>
+  // ============================================
+  // MODULE NAVIGATION
+  // ============================================
+  function navigateToExoplanets() {
+    window.location.href = "{{ url_for('exoplanets.index') }}";
+  }
+
+  // ============================================
+  // ACCORDION MANAGEMENT
+  // ============================================
+
+  function toggleAccordionSection(header) {
+    const section = header.closest('.accordion-section');
+    if (!section) return;
+    
+    section.classList.toggle('expanded');
+    saveAccordionState();
+  }
+
+  function saveAccordionState() {
+    const state = {};
+    document.querySelectorAll('.accordion-section').forEach(section => {
+      const sectionName = section.getAttribute('data-section');
+      if (sectionName) {
+        state[sectionName] = section.classList.contains('expanded');
+      }
+    });
+    localStorage.setItem('agata_accordion_state', JSON.stringify(state));
+  }
+
+  function loadAccordionState() {
+    try {
+      const savedState = localStorage.getItem('agata_accordion_state');
+      if (!savedState) return;
+      
+      const state = JSON.parse(savedState);
+      Object.entries(state).forEach(([sectionName, expanded]) => {
+        const section = document.querySelector(`.accordion-section[data-section="${sectionName}"]`);
+        if (section) {
+          if (expanded) {
+            section.classList.add('expanded');
+          } else {
+            section.classList.remove('expanded');
+          }
+        }
+      });
+    } catch (e) {
+      console.warn('Errore caricamento stato accordion:', e);
+    }
+  }
+
+  function updateAccordionBadges() {
+    // Session count
+    if (typeof window.state !== 'undefined' && window.state.activeSession) {
+      const activeSessions = Array.from(window.state.activeSession.values()).filter(v => v).length;
+      const badge = document.getElementById('sessionCountBadge');
+      if (badge) badge.textContent = activeSessions;
+    }
+    
+    // Outlier count
+    if (typeof window.state !== 'undefined' && window.state.sigmaClipSuggested) {
+      const outlierCount = window.state.sigmaClipSuggested.size;
+      const badge = document.getElementById('outlierBadge');
+      
+      if (badge) {
+        if (outlierCount > 0) {
+          badge.textContent = outlierCount;
+          badge.style.display = 'block';
+          
+          const sigmaSection = document.querySelector('.accordion-section[data-section="sigma-clipping"]');
+          if (sigmaSection) sigmaSection.classList.add('expanded');
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+    }
+  }
+
+  // Inizializzazione (solo accordion - auto-load ora in main.js)
+  document.addEventListener('DOMContentLoaded', () => {
+    loadAccordionState();
+    updateAccordionBadges();
+  });
+
+  // Esponi globalmente
+  window.toggleAccordionSection = toggleAccordionSection;
+  window.updateAccordionBadges = updateAccordionBadges;
+</script>
+</body>
+</html>

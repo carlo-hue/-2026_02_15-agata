@@ -1,0 +1,225 @@
+﻿:root {
+    --tpf-bg: #eef3f8;
+    --tpf-surface: #ffffff;
+    --tpf-border: #d8e2ee;
+    --tpf-text: #233548;
+    --tpf-muted: #63768a;
+    --tpf-primary: #2f7ed8;
+    --tpf-success-bg: #e9f8ef;
+    --tpf-success-text: #1a6a3a;
+    --tpf-error-bg: #fdecec;
+    --tpf-error-text: #a12b2b;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: "Segoe UI", Tahoma, sans-serif;
+    background: var(--tpf-bg);
+    color: var(--tpf-text);
+}
+
+.page-shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 2rem;
+}
+
+.hero-panel,
+.panel {
+    background: var(--tpf-surface);
+    border: 1px solid var(--tpf-border);
+    border-radius: 14px;
+    padding: 1.1rem 1.2rem;
+    box-shadow: 0 10px 24px rgba(18, 32, 52, 0.08);
+}
+
+.hero-panel,
+.panel-input,
+.panel-status,
+.panel-save,
+.panel {
+    margin-bottom: 1rem;
+}
+
+h1,
+h2 {
+    margin: 0 0 0.55rem;
+}
+
+h1 {
+    font-size: 1.55rem;
+}
+
+h2 {
+    font-size: 1.05rem;
+}
+
+.lead {
+    margin: 0 0 0.4rem;
+    font-weight: 600;
+}
+
+.meta,
+.form-hint {
+    margin: 0;
+    color: var(--tpf-muted);
+}
+
+.form-hint {
+    font-size: 0.9rem;
+    margin-top: 0.2rem;
+}
+
+.tpf-form {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.input-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 0.7rem;
+    align-items: center;
+}
+
+.tpf-form label {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.tpf-form input {
+    width: 100%;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid var(--tpf-border);
+    border-radius: 10px;
+    font-size: 0.95rem;
+}
+
+.tpf-form input:focus {
+    outline: none;
+    border-color: var(--tpf-primary);
+    box-shadow: 0 0 0 3px rgba(47, 126, 216, 0.12);
+}
+
+.tpf-form button {
+    padding: 0.75rem 1.1rem;
+    border: 0;
+    border-radius: 10px;
+    background: var(--tpf-primary);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+}
+
+.tpf-form .button-secondary {
+    background: #5d738a;
+}
+
+.tpf-form button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.status-box {
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--tpf-border);
+}
+
+.status-neutral {
+    background: #f8fbff;
+    color: var(--tpf-text);
+}
+
+.status-success {
+    background: var(--tpf-success-bg);
+    color: var(--tpf-success-text);
+    border-color: rgba(26, 106, 58, 0.18);
+}
+
+.status-error {
+    background: var(--tpf-error-bg);
+    color: var(--tpf-error-text);
+    border-color: rgba(161, 43, 43, 0.18);
+}
+
+.hidden {
+    display: none;
+}
+
+.grid-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.65rem;
+}
+
+.info-grid > div {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.7rem 0.8rem;
+    border: 1px solid #edf2f8;
+    border-radius: 10px;
+    background: #fbfdff;
+}
+
+.info-grid .k {
+    color: var(--tpf-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+
+.info-grid .v {
+    font-weight: 600;
+}
+
+.mono {
+    font-family: Consolas, "Courier New", monospace;
+}
+
+.empty-state,
+.panel-note {
+    color: var(--tpf-muted);
+}
+
+.plot-box {
+    min-height: 320px;
+}
+
+#tpfPlot {
+    width: min(100%, 640px);
+    aspect-ratio: 1 / 1;
+    min-height: 0;
+    margin: 0 auto;
+}
+
+.output-box {
+    margin: 0;
+    min-height: 180px;
+    padding: 0.9rem 1rem;
+    white-space: pre-wrap;
+    overflow-x: auto;
+    border: 1px solid var(--tpf-border);
+    border-radius: 10px;
+    background: #f8fbff;
+}
+
+@media (max-width: 720px) {
+    .input-row {
+        grid-template-columns: 1fr;
+    }
+
+    .plot-box {
+        min-height: 260px;
+    }
+}

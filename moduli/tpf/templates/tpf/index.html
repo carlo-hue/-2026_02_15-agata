@@ -1,0 +1,120 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ module_title }}</title>
+    <link rel="stylesheet" href="{{ url_for('tpf.static', filename='css/tpf.css') }}">
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+</head>
+<body>
+    <main
+        id="tpfApp"
+        class="page-shell"
+        data-run-url="{{ url_for('tpf.run_api') }}"
+        data-save-url="{{ url_for('tpf.save_api') }}"
+        data-initial-gaia-source-id="{{ initial_gaia_source_id }}"
+        data-source-context="{{ source_context }}"
+        data-entry-mode="{{ entry_mode }}"
+    >
+        <section class="hero-panel">
+            <h1>{{ module_title }}</h1>
+            <p class="lead">{{ scaffold_message }}</p>
+            <p class="meta">Demo interna del modulo TPF con pipeline minima Gaia DR3, preview TPF e salvataggio stub.</p>
+        </section>
+
+        <section class="panel panel-integration">
+            <h2>Contesto di integrazione</h2>
+            <div class="info-grid integration-grid">
+                <div>
+                    <span class="k">Modalita' di apertura</span>
+                    <span class="v">
+                        {% if entry_mode == 'incoming-params' %}
+                        Apertura con parametri in ingresso
+                        {% else %}
+                        Apertura autonoma
+                        {% endif %}
+                    </span>
+                </div>
+                <div>
+                    <span class="k">gaia_source_id da URL</span>
+                    <span class="v mono">{{ initial_gaia_source_id or '-' }}</span>
+                </div>
+                <div>
+                    <span class="k">source_context</span>
+                    <span class="v">{{ source_context or '-' }}</span>
+                </div>
+            </div>
+            <p class="form-hint">
+                Il modulo puo' essere aperto direttamente oppure richiamato da altri componenti AGATA tramite parametri URL.
+                La pipeline non parte automaticamente: conferma sempre con <strong>Run</strong>.
+            </p>
+        </section>
+
+        <section class="panel panel-input">
+            <h2>Input</h2>
+            <form id="tpfForm" class="tpf-form" novalidate>
+                <label for="gaiaSourceIdInput">gaia_source_id (DR3)</label>
+                <div class="input-row">
+                    <input
+                        id="gaiaSourceIdInput"
+                        name="gaia_source_id"
+                        type="text"
+                        value="{{ initial_gaia_source_id }}"
+                        placeholder="es. 5853498713190525696"
+                        autocomplete="off"
+                    >
+                    <button type="submit" id="runButton">Run</button>
+                    <button type="button" id="saveButton" class="button-secondary" disabled>Salva sessione</button>
+                </div>
+                <p class="form-hint">Inserisci un Gaia DR3 source_id valido e avvia la pipeline. Il salvataggio resta in modalita' stub.</p>
+            </form>
+        </section>
+
+        <section class="panel panel-status">
+            <h2>Stato</h2>
+            <div id="statusBox" class="status-box status-neutral">In attesa di input.</div>
+            <div id="errorBox" class="status-box status-error hidden"></div>
+        </section>
+
+        <section class="panel panel-save">
+            <h2>Salvataggio</h2>
+            <div id="saveStatusBox" class="status-box status-neutral">Nessun salvataggio eseguito.</div>
+        </section>
+
+        <section class="grid-layout">
+            <section class="panel">
+                <h2>Target</h2>
+                <div id="targetInfo" class="info-grid empty-state">Nessun target caricato.</div>
+            </section>
+
+            <section class="panel">
+                <h2>TPF</h2>
+                <div id="tpfInfo" class="panel-note">TPF non ancora richiesta.</div>
+                <div id="tpfPlot" class="plot-box"></div>
+            </section>
+
+            <section class="panel">
+                <h2>Light Curve</h2>
+                <div id="lightcurveInfo" class="panel-note">Light curve non ancora richiesta.</div>
+                <div id="lightcurvePlot" class="plot-box"></div>
+            </section>
+        </section>
+
+        <section class="panel">
+            <h2>Payload di ritorno AGATA</h2>
+            <pre id="returnPayloadBox" class="output-box">{
+  "status": "ok",
+  "message": "Nessun risultato pronto"
+}</pre>
+        </section>
+
+        <section class="panel">
+            <h2>Output JSON</h2>
+            <pre id="output" class="output-box">{}</pre>
+        </section>
+    </main>
+
+    <script src="{{ url_for('tpf.static', filename='js/tpf/main.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,1922 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Cataloghi Esterni - AGATA Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">Cataloghi Fotometrici Esterni</h1>
+            <p class="text-muted mb-0">Ricerca e importazione dati da TESS, ZTF, ASAS-SN, OGLE</p>
+        </div>
+    </div>
+
+    <!-- Importazioni recenti - con filtri, ordinamento e paginazione (full-width) - PRIMA -->
+    <div class="mt-0">
+                <!-- Quick Filters Temporali -->
+                <div class="row mb-3">
+                    <div class="col-auto">
+                        <h6 class="mb-0"><i class="bi bi-calendar-event me-2"></i>Periodo</h6>
+                    </div>
+                    <div class="col-auto">
+                        <a href="?date_filter=all&state={{ current_state }}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}&sort={{ current_sort }}&order={{ current_order }}"
+                           class="btn btn-sm {% if current_date_filter == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            <i class="bi bi-hourglass-split me-1"></i>Tutti
+                        </a>
+                    </div>
+                    <div class="col-auto">
+                        <a href="?date_filter=24h&state={{ current_state }}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}&sort={{ current_sort }}&order={{ current_order }}"
+                           class="btn btn-sm {% if current_date_filter == '24h' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            <i class="bi bi-clock me-1"></i>24h
+                        </a>
+                    </div>
+                    <div class="col-auto">
+                        <a href="?date_filter=7d&state={{ current_state }}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}&sort={{ current_sort }}&order={{ current_order }}"
+                           class="btn btn-sm {% if current_date_filter == '7d' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            <i class="bi bi-calendar me-1"></i>7gg
+                        </a>
+                    </div>
+                    <div class="col-auto">
+                        <a href="?date_filter=30d&state={{ current_state }}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}&sort={{ current_sort }}&order={{ current_order }}"
+                           class="btn btn-sm {% if current_date_filter == '30d' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            <i class="bi bi-calendar-range me-1"></i>30gg
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Bottone per aprire filtri avanzati -->
+                <div class="mb-3">
+                    <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#advancedFilters">
+                        <i class="bi bi-funnel me-1"></i> Filtri Avanzati
+                    </button>
+                    <a href="{{ url_for('admin.external_catalogs_page') }}" class="btn btn-sm btn-outline-secondary ms-2">
+                        <i class="bi bi-x-circle me-1"></i> Reset
+                    </a>
+                </div>
+
+                <!-- Form filtri avanzati (si apre se almeno un filtro attivo) -->
+                <div class="collapse {% if current_state != 'all' or current_association_id %}show{% endif %}" id="advancedFilters">
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <form method="get" class="row g-2 align-items-end">
+                                <!-- Mantieni parametri non modificabili -->
+                                <input type="hidden" name="date_filter" value="{{ current_date_filter }}">
+
+                                <!-- Filtro Stato -->
+                                <div class="col-md-3">
+                                    <label class="form-label small">Stato</label>
+                                    <select name="state" class="form-select form-select-sm">
+                                        <option value="all" {% if current_state == 'all' %}selected{% endif %}>Tutti</option>
+                                        <option value="preview" {% if current_state == 'preview' %}selected{% endif %}>Preview</option>
+                                        <option value="completed" {% if current_state == 'completed' %}selected{% endif %}>Completato</option>
+                                        <option value="failed" {% if current_state == 'failed' %}selected{% endif %}>Fallito</option>
+                                        <option value="cancelled" {% if current_state == 'cancelled' %}selected{% endif %}>Cancellato</option>
+                                    </select>
+                                </div>
+
+                                <!-- Filtro Associazione (solo superuser) -->
+                                {% if is_superuser %}
+                                <div class="col-md-3">
+                                    <label class="form-label small">Associazione</label>
+                                    <select name="association_id" class="form-select form-select-sm">
+                                        <option value="">Tutte</option>
+                                        {% for assoc in associations %}
+                                        <option value="{{ assoc.id }}" {% if current_association_id == assoc.id %}selected{% endif %}>
+                                            {{ assoc.name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                {% endif %}
+
+                                <div class="col-auto">
+                                    <button type="submit" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-search me-1"></i>Filtra
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabella importazioni -->
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-clock-history me-2"></i>Importazioni
+                        </h5>
+                        <a href="#" class="btn btn-sm btn-outline-primary" onclick="refreshImports()">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </a>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>
+                                            <a href="?page=1&date_filter={{ current_date_filter }}&state={{ current_state }}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}&sort=search_value&order={% if current_sort == 'search_value' and current_order == 'asc' %}desc{% else %}asc{% endif %}"
+                                               class="sortable-header">
+                                                Ricerca
+                                                {% if current_sort == 'search_value' %}
+                                                <i class="bi bi-arrow-{% if current_order == 'desc' %}down{% else %}up{% endif %}"></i>
+                                                {% endif %}
+                                            </a>
+                                        </th>
+                                        <th>
+                                            <a href="?page=1&date_filter={{ current_date_filter }}&state={{ current_state }}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}&sort=state&order={% if current_sort == 'state' and current_order == 'asc' %}desc{% else %}asc{% endif %}"
+                                               class="sortable-header">
+                                                Stato
+                                                {% if current_sort == 'state' %}
+                                                <i class="bi bi-arrow-{% if current_order == 'desc' %}down{% else %}up{% endif %}"></i>
+                                                {% endif %}
+                                            </a>
+                                        </th>
+                                        <th>
+                                            <a href="?page=1&date_filter={{ current_date_filter }}&state={{ current_state }}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}&sort=total_points_imported&order={% if current_sort == 'total_points_imported' and current_order == 'asc' %}desc{% else %}asc{% endif %}"
+                                               class="sortable-header">
+                                                Punti
+                                                {% if current_sort == 'total_points_imported' %}
+                                                <i class="bi bi-arrow-{% if current_order == 'desc' %}down{% else %}up{% endif %}"></i>
+                                                {% endif %}
+                                            </a>
+                                        </th>
+                                        {% if is_superuser %}
+                                        <th>Associazione</th>
+                                        {% endif %}
+                                        <th>
+                                            <a href="?page=1&date_filter={{ current_date_filter }}&state={{ current_state }}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}&sort=created_at&order={% if current_sort == 'created_at' and current_order == 'asc' %}desc{% else %}asc{% endif %}"
+                                               class="sortable-header">
+                                                Data
+                                                {% if current_sort == 'created_at' %}
+                                                <i class="bi bi-arrow-{% if current_order == 'desc' %}down{% else %}up{% endif %}"></i>
+                                                {% endif %}
+                                            </a>
+                                        </th>
+                                        <th colspan="2">Azioni</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="importsTable">
+                                    {% for imp in imports %}
+                                    <tr>
+                                        <td>{{ imp.id }}</td>
+                                        <td>
+                                            <small class="text-muted">{{ imp.search_type }}:</small>
+                                            {{ imp.search_value[:30] }}{% if imp.search_value|length > 30 %}...{% endif %}
+                                        </td>
+                                        <td>
+                                            {% if imp.state == 'completed' %}
+                                            <span class="badge bg-success">Completato</span>
+                                            {% elif imp.state == 'preview' %}
+                                            <span class="badge bg-info">Preview</span>
+                                            {% elif imp.state == 'searching' %}
+                                            <span class="badge bg-warning">In corso</span>
+                                            {% elif imp.state == 'failed' %}
+                                            <span class="badge bg-danger">Fallito</span>
+                                            {% elif imp.state == 'cancelled' %}
+                                            <span class="badge bg-secondary">Cancellato</span>
+                                            {% else %}
+                                            <span class="badge bg-light text-dark">{{ imp.state }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div>
+                                                <strong>{{ imp.total_points_imported if imp.total_points_imported > 0 else imp.total_points_available }}</strong> pt
+                                            </div>
+                                            <small class="text-muted">
+                                                {% set star_count = import_stars_count.get(imp.id, 0) %}
+                                                {{ star_count }} {% if star_count == 1 %}stella{% else %}stelle{% endif %}
+                                            </small>
+                                        </td>
+                                        {% if is_superuser %}
+                                        <td>
+                                            {% if imp.requester and imp.requester.association %}
+                                            <small>{{ imp.requester.association.name }}</small>
+                                            {% else %}
+                                            <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        {% endif %}
+                                        <td>
+                                            <small>{{ imp.created_at.strftime('%d/%m/%y %H:%M') }}</small>
+                                        </td>
+                                        <td>
+                                            <a href="{{ url_for('admin.external_catalog_detail', import_id=imp.id) }}"
+                                               class="btn btn-sm btn-outline-primary" title="Visualizza import">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <a href="{{ url_for('admin.stars_catalog_page', import_id=imp.id) }}"
+                                               class="btn btn-sm btn-outline-info" title="Filtra stelle per questo import">
+                                                <i class="bi bi-funnel"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="{% if is_superuser %}8{% else %}7{% endif %}" class="text-center text-muted">
+                                            Nessuna importazione trovata con i filtri selezionati
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Paginazione -->
+                    {% if total > per_page %}
+                    <div class="card-footer">
+                        <nav>
+                            <ul class="pagination justify-content-center mb-0">
+                                <!-- Prima pagina -->
+                                {% if page > 1 %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=1&date_filter={{ current_date_filter }}&state={{ current_state }}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}&sort={{ current_sort }}&order={{ current_order }}">
+                                        <i class="bi bi-chevron-double-left"></i>
+                                    </a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page - 1 }}&date_filter={{ current_date_filter }}&state={{ current_state }}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}&sort={{ current_sort }}&order={{ current_order }}">
+                                        Precedente
+                                    </a>
+                                </li>
+                                {% endif %}
+
+                                <!-- Pagina corrente -->
+                                <li class="page-item active">
+                                    <span class="page-link">
+                                        Pagina {{ page }} di {{ ((total - 1) // per_page) + 1 }}
+                                        <small class="ms-2 text-white-50">({{ total }} totali)</small>
+                                    </span>
+                                </li>
+
+                                <!-- Successivo -->
+                                {% if page * per_page < total %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page + 1 }}&date_filter={{ current_date_filter }}&state={{ current_state }}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}&sort={{ current_sort }}&order={{ current_order }}">
+                                        Successivo
+                                    </a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ ((total - 1) // per_page) + 1 }}&date_filter={{ current_date_filter }}&state={{ current_state }}{% if current_association_id %}&association_id={{ current_association_id }}{% endif %}&sort={{ current_sort }}&order={{ current_order }}">
+                                        <i class="bi bi-chevron-double-right"></i>
+                                    </a>
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    </div>
+                    {% endif %}
+                </div>
+    </div>
+
+    <!-- Form Ricerca e Upload (solo admin/superuser) - DOPO -->
+    <div class="row mt-4">
+        <div class="col-lg-5">
+            {% if current_user.role in ['admin', 'superuser'] %}
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-search me-2"></i>Ricerca Stella
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="searchForm">
+                        <!-- Coordinate -->
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label class="form-label">Right Ascension (gradi)</label>
+                                <input type="number" class="form-control" id="ra" name="ra"
+                                       step="0.000001" min="0" max="360" required
+                                       placeholder="es. 88.79">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Declination (gradi)</label>
+                                <input type="number" class="form-control" id="dec" name="dec"
+                                       step="0.000001" min="-90" max="90" required
+                                       placeholder="es. 7.41">
+                            </div>
+                        </div>
+
+                        <!-- Raggio -->
+                        <div class="mb-3">
+                            <label class="form-label">Raggio ricerca (arcsec)</label>
+                            <input type="number" class="form-control" id="radius" name="radius"
+                                   value="5.0" step="0.1" min="0.1" max="60">
+                            <div class="form-text">Raggio di cone search (default 5")</div>
+                        </div>
+
+                        <!-- Gaia ID opzionale -->
+                        <div class="mb-3">
+                            <label class="form-label">Gaia DR3 ID (opzionale)</label>
+                            <input type="text" class="form-control" id="gaia_id" name="gaia_id"
+                                   placeholder="es. 3405373307341156992">
+                            <div class="form-text">Se specificato, verra' usato per l'import</div>
+                        </div>
+
+                        <!-- Catalogo (singola selezione) -->
+                        <div class="mb-3">
+                            <label class="form-label">Catalogo</label>
+                            <select class="form-select" id="catalog" name="catalog" required>
+                                <option value="ztf">ZTF - Zwicky Transient Facility (Dec > -30)</option>
+                                <option value="asassn">ASAS-SN - All-Sky Automated Survey</option>
+                                <option value="ogle">OGLE - Bulge/LMC/SMC</option>
+                                <option value="tess">TESS - Solo preview (download non implementato)</option>
+                            </select>
+                            <div class="form-text">Seleziona il catalogo da interrogare</div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100" id="searchBtn">
+                            <i class="bi bi-search me-2"></i>Cerca nel Catalogo
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Preset stelle note -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">Stelle di Test</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-sm btn-outline-secondary preset-btn"
+                                data-ra="88.79" data-dec="7.41" data-name="Betelgeuse">
+                            Betelgeuse
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary preset-btn"
+                                data-ra="83.82" data-dec="-5.39" data-name="Rigel">
+                            Rigel
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary preset-btn"
+                                data-ra="101.28" data-dec="-16.72" data-name="Sirius">
+                            Sirius
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary preset-btn"
+                                data-ra="279.23" data-dec="38.78" data-name="Vega">
+                            Vega
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <!-- Form ricerca per analyst - solo stelle assegnate -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-search me-2"></i>Cerca Dati per le Tue Stelle
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="searchForm">
+                        <!-- Selezione stella assegnata -->
+                        <div class="mb-3">
+                            <label class="form-label">Seleziona Stella Assegnata</label>
+                            <select class="form-select" id="assigned_star" name="assigned_star" required>
+                                <option value="">-- Seleziona una stella --</option>
+                                {% for project in assigned_projects %}
+                                <option value="{{ project.gaia_id }}"
+                                        data-ra="{{ project.ra }}"
+                                        data-dec="{{ project.dec }}"
+                                        data-code="{{ project.project_code }}">
+                                    {{ project.project_code }} - Gaia {{ project.gaia_id[:12] }}...
+                                </option>
+                                {% else %}
+                                <option value="" disabled>Nessuna stella assegnata</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Puoi aggiungere dati solo alle stelle assegnate a te</div>
+                        </div>
+
+                        <!-- Coordinate (readonly, mostrate per info) -->
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label class="form-label">RA (gradi)</label>
+                                <input type="number" class="form-control" id="ra" name="ra"
+                                       step="0.000001" readonly>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Dec (gradi)</label>
+                                <input type="number" class="form-control" id="dec" name="dec"
+                                       step="0.000001" readonly>
+                            </div>
+                        </div>
+
+                        <!-- Gaia ID (hidden, popolato dalla selezione) -->
+                        <input type="hidden" id="gaia_id" name="gaia_id">
+
+                        <!-- Raggio -->
+                        <div class="mb-3">
+                            <label class="form-label">Raggio ricerca (arcsec)</label>
+                            <input type="number" class="form-control" id="radius" name="radius"
+                                   value="5.0" step="0.1" min="0.1" max="60">
+                        </div>
+
+                        <!-- Catalogo -->
+                        <div class="mb-3">
+                            <label class="form-label">Catalogo</label>
+                            <select class="form-select" id="catalog" name="catalog" required>
+                                <option value="ztf">ZTF - Zwicky Transient Facility (Dec > -30)</option>
+                                <option value="asassn">ASAS-SN - All-Sky Automated Survey</option>
+                                <option value="ogle">OGLE - Bulge/LMC/SMC</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100" id="searchBtn"
+                                {% if not assigned_projects %}disabled{% endif %}>
+                            <i class="bi bi-search me-2"></i>Cerca nel Catalogo
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Link ai progetti -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="bi bi-folder me-2"></i>I Miei Progetti
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('admin.list_projects') }}?state=assigned&assigned_to={{ current_user.id }}" class="btn btn-success btn-sm">
+                            <i class="bi bi-person-check me-2"></i>Le Mie Stelle ({{ assigned_projects|length if assigned_projects else 0 }})
+                        </a>
+                        <a href="{{ url_for('admin.list_projects') }}?state=available" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-star me-2"></i>Stelle Disponibili
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Upload da File -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-upload me-2"></i>Carica da File
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="uploadForm" enctype="multipart/form-data">
+                        <!-- File -->
+                        <div class="mb-3">
+                            <label class="form-label">File dati fotometrici</label>
+                            <input type="file" class="form-control" id="dataFile" name="file"
+                                   accept=".csv,.txt,.dat" required>
+                            <div class="form-text">CSV o TXT con colonne: tempo, magnitudine, errore (opz.)</div>
+                        </div>
+
+                        <!-- Gaia ID -->
+                        <div class="mb-3">
+                            <label class="form-label">Gaia DR3 ID</label>
+                            <input type="text" class="form-control" id="upload_gaia_id" name="gaia_id"
+                                   placeholder="es. 3405373307341156992" required>
+                            <div class="form-text">Identificativo della stella di riferimento</div>
+                        </div>
+
+                        <!-- Nome catalogo -->
+                        <div class="mb-3">
+                            <label class="form-label">Nome catalogo/sorgente</label>
+                            <input type="text" class="form-control" id="catalog_name" name="catalog_name"
+                                   placeholder="es. AAVSO, Osservatorio XYZ">
+                            <div class="form-text">Opzionale. Se vuoto usa il nome del file</div>
+                        </div>
+
+                        <!-- Opzioni avanzate (collapsible) -->
+                        <div class="mb-3">
+                            <a class="btn btn-sm btn-link p-0" data-bs-toggle="collapse" href="#uploadOptions">
+                                <i class="bi bi-gear me-1"></i>Opzioni avanzate
+                            </a>
+                        </div>
+
+                        <div class="collapse" id="uploadOptions">
+                            <div class="card card-body bg-light mb-3">
+                                <!-- Formato tempo e banda -->
+                                <div class="row mb-2">
+                                    <div class="col-8">
+                                        <label class="form-label small">Formato tempo</label>
+                                        <select class="form-select form-select-sm" id="time_format" name="time_format">
+                                            <option value="hjd" selected>HJD (Heliocentric Julian Date)</option>
+                                            <option value="jd">JD (Julian Date)</option>
+                                            <option value="mjd">MJD (Modified Julian Date)</option>
+                                            <option value="bjd">BJD (Barycentric Julian Date)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="form-label small">Banda</label>
+                                        <input type="text" class="form-control form-control-sm"
+                                               id="band" name="band" placeholder="es. V, R">
+                                    </div>
+                                </div>
+
+                                <!-- Nomi colonne -->
+                                <div class="row">
+                                    <div class="col-4">
+                                        <label class="form-label small">Col. tempo</label>
+                                        <input type="text" class="form-control form-control-sm"
+                                               id="time_col" name="time_col" placeholder="auto">
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="form-label small">Col. mag</label>
+                                        <input type="text" class="form-control form-control-sm"
+                                               id="mag_col" name="mag_col" placeholder="auto">
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="form-label small">Col. errore</label>
+                                        <input type="text" class="form-control form-control-sm"
+                                               id="err_col" name="err_col" placeholder="auto">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-success w-100" id="uploadBtn">
+                            <i class="bi bi-upload me-2"></i>Carica e Importa
+                        </button>
+                    </form>
+
+                    <!-- Formato file -->
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <strong>Formato file:</strong><br>
+                            <code>hjd,mag,mag_err</code><br>
+                            <code>2459000.5,12.34,0.02</code><br>
+                            <code>2459001.5,12.38,0.03</code>
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upload TESS QLP -->
+            <div class="card mt-3">
+                <div class="card-header bg-info text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-stars me-2"></i>Carica TESS QLP (Flusso)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="uploadQlpForm" enctype="multipart/form-data">
+                        <!-- File -->
+                        <div class="mb-3">
+                            <label class="form-label">File TESS QLP</label>
+                            <input type="file" class="form-control" id="qlpFile" name="file"
+                                   accept=".fit,.fits" required>
+                            <div class="form-text">File con colonne: TIME, PDCSAP_FLUX, PDCSAP_FLUX_ERR</div>
+                        </div>
+
+                        <!-- Gaia ID -->
+                        {% if is_superuser %}
+                        <!-- Superuser: inserimento manuale -->
+                        <div class="mb-3">
+                            <label class="form-label">Gaia DR3 ID</label>
+                            <input type="text" class="form-control" id="qlp_gaia_id" name="gaia_id"
+                                   placeholder="es. 3405373307341156992" required>
+                        </div>
+                        {% else %}
+                        <!-- Admin/Analyst: seleziona da progetti -->
+                        <div class="mb-3">
+                            <label class="form-label">Seleziona Stella</label>
+                            <select class="form-select" id="qlp_star_select" name="qlp_star_select" required>
+                                <option value="">-- Seleziona una stella --</option>
+                                {% for project in assigned_projects %}
+                                <option value="{{ project.gaia_id }}">
+                                    {{ project.project_code }} - Gaia {{ project.gaia_id[:12] }}...
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <input type="hidden" id="qlp_gaia_id" name="gaia_id" required>
+                            <div class="form-text">Puoi aggiungere dati solo alle stelle assegnate a te</div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Settore (opzionale) -->
+                        <div class="mb-3">
+                            <label class="form-label">Settore TESS (opzionale)</label>
+                            <input type="text" class="form-control" id="qlp_sector" name="sector"
+                                   placeholder="es. 1, 27">
+                        </div>
+
+                        <button type="submit" class="btn btn-info w-100" id="uploadQlpBtn">
+                            <i class="bi bi-upload me-2"></i>Carica QLP
+                        </button>
+                    </form>
+
+                    <div class="mt-3 alert alert-warning small mb-0">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>Nota:</strong> I dati TESS QLP sono in flusso, non magnitudine.
+                        La conversione verra' gestita successivamente.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Download Automatico TESS QLP -->
+            <div class="card mt-3">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-cloud-download me-2"></i>Download Automatico TESS QLP
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="autoQlpForm">
+                        <!-- Input diverso per superuser vs admin/analyst -->
+                        {% if is_superuser %}
+                        <!-- Superuser: inserimento manuale Gaia ID -->
+                        <div class="mb-3">
+                            <label class="form-label">Gaia DR3 ID</label>
+                            <input type="text" class="form-control" id="auto_qlp_gaia_id" name="gaia_id"
+                                   placeholder="es. 3405373307341156992" required>
+                            <div class="form-text">Inserisci il Gaia DR3 ID della stella</div>
+                        </div>
+                        {% else %}
+                        <!-- Admin/Analyst: seleziona da progetti -->
+                        <div class="mb-3">
+                            <label class="form-label">Seleziona Progetto</label>
+                            <select class="form-select" id="auto_qlp_project_select" name="project_id" required>
+                                <option value="">-- Seleziona un progetto --</option>
+                                {% for project in assigned_projects %}
+                                <option value="{{ project.id }}">
+                                    {{ project.project_code }} - Gaia {{ project.gaia_id[:12] }}...
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Scarica automaticamente i dati TESS per il progetto selezionato</div>
+                        </div>
+                        {% endif %}
+
+                        <button type="submit" class="btn btn-success w-100" id="autoQlpSearchBtn"
+                                {% if not is_superuser and not assigned_projects %}disabled{% endif %}>
+                            <i class="bi bi-search me-2"></i>Cerca Settori Disponibili
+                        </button>
+
+                        <!-- Progress indicator (nascosto inizialmente) -->
+                        <div id="autoQlpProgress" style="display: none;" class="mt-3">
+                            <div class="alert alert-info mb-0">
+                                <div class="d-flex align-items-center">
+                                    <div class="spinner-border spinner-border-sm me-3" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <div>
+                                        <strong id="autoQlpProgressText">Ricerca in corso...</strong>
+                                        <div class="small text-muted mt-1" id="autoQlpProgressDetails"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                    <!-- Risultati ricerca settori (nascosto inizialmente) -->
+                    <div id="autoQlpSectorsResult" style="display: none;" class="mt-3">
+                        <hr>
+                        <h6 class="mb-3">Settori TESS QLP Disponibili</h6>
+                        <div id="autoQlpSectorsInfo" class="alert alert-info mb-3"></div>
+
+                        <!-- Lista settori con checkbox -->
+                        <div id="autoQlpSectorsList" class="mb-3"></div>
+
+                        <!-- Bottone download selezionati -->
+                        <button type="button" class="btn btn-success w-100" id="autoQlpDownloadBtn" style="display: none;">
+                            <i class="bi bi-download me-2"></i>Scarica Settori Selezionati
+                        </button>
+
+                        <!-- Progress download multipli -->
+                        <div id="autoQlpMultiProgress" style="display: none;" class="mt-3">
+                            <div class="alert alert-info">
+                                <h6 class="mb-2">Avanzamento Download</h6>
+                                <div id="autoQlpMultiProgressList"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3 alert alert-success small mb-0">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>Come funziona:</strong><br>
+                        <strong>Step 1:</strong> Ricerca settori disponibili su MAST (veloce, NO download files)<br>
+                        <strong>Step 2:</strong> Seleziona uno o più settori da scaricare e importare<br>
+                        I file vengono scaricati uno per uno, processati e cancellati automaticamente.<br>
+                        <small class="text-muted">Puoi selezionare più settori - verranno processati in sequenza mostrando il progresso.</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Download Automatico ASAS-SN -->
+            <div class="card mt-3">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-cloud-download me-2"></i>Download Automatico ASAS-SN
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="autoAsassnForm">
+                        <!-- Input diverso per superuser vs admin/analyst -->
+                        {% if is_superuser %}
+                        <!-- Superuser: inserimento manuale Gaia ID -->
+                        <div class="mb-3">
+                            <label class="form-label">Gaia DR3 ID</label>
+                            <input type="text" class="form-control" id="auto_asassn_gaia_id" name="gaia_id"
+                                   placeholder="es. 3405373307341156992" required>
+                            <div class="form-text">Inserisci il Gaia DR3 ID della stella</div>
+                        </div>
+                        {% else %}
+                        <!-- Admin/Analyst: seleziona da progetti -->
+                        <div class="mb-3">
+                            <label class="form-label">Seleziona Progetto</label>
+                            <select class="form-select" id="auto_asassn_project_select" name="project_id" required>
+                                <option value="">-- Seleziona un progetto --</option>
+                                {% for project in assigned_projects %}
+                                <option value="{{ project.id }}">
+                                    {{ project.project_code }} - Gaia {{ project.gaia_id[:12] }}...
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Scarica automaticamente i dati ASAS-SN per il progetto selezionato</div>
+                        </div>
+                        {% endif %}
+
+                        <button type="submit" class="btn btn-warning w-100" id="autoAsassnSearchBtn"
+                                {% if not is_superuser and not assigned_projects %}disabled{% endif %}>
+                            <i class="bi bi-search me-2"></i>Cerca e Scarica Dati ASAS-SN
+                        </button>
+
+                        <!-- Progress indicator (nascosto inizialmente) -->
+                        <div id="autoAsassnProgress" style="display: none;" class="mt-3">
+                            <div class="alert alert-info mb-0">
+                                <div class="d-flex align-items-center">
+                                    <div class="spinner-border spinner-border-sm me-3" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <div>
+                                        <strong id="autoAsassnProgressText">Ricerca in corso...</strong>
+                                        <div class="small text-muted mt-1" id="autoAsassnProgressDetails"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div class="mt-3 alert alert-warning small mb-0">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>Come funziona:</strong><br>
+                        <strong>Step 1:</strong> Conversione Gaia ID → Coordinate<br>
+                        <strong>Step 2:</strong> Query ASAS-SN Sky Patrol (banda V)<br>
+                        <strong>Step 3:</strong> Import automatico nel database<br>
+                        <small class="text-muted">I dati vengono importati direttamente, nessuna selezione necessaria.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Risultati Ricerca -->
+        <div class="col-lg-7">
+            <div class="card" id="resultsCard" style="display: none;">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-database me-2"></i>Risultati Ricerca
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="searchResults"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.sortable-header {
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    padding: 0.5rem;
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.sortable-header:hover {
+    opacity: 0.7;
+    text-decoration: none;
+    color: inherit;
+}
+
+.sortable-header i {
+    margin-left: 0.25rem;
+    font-size: 0.85em;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchForm = document.getElementById('searchForm');
+    const searchBtn = document.getElementById('searchBtn');
+    const resultsCard = document.getElementById('resultsCard');
+    const searchResults = document.getElementById('searchResults');
+
+    // Preset buttons (per admin/superuser)
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('ra').value = this.dataset.ra;
+            document.getElementById('dec').value = this.dataset.dec;
+        });
+    });
+
+    // Selezione stella assegnata (per analyst)
+    const assignedStarSelect = document.getElementById('assigned_star');
+    if (assignedStarSelect) {
+        assignedStarSelect.addEventListener('change', function() {
+            const selected = this.options[this.selectedIndex];
+            if (selected.value) {
+                document.getElementById('ra').value = selected.dataset.ra;
+                document.getElementById('dec').value = selected.dataset.dec;
+                document.getElementById('gaia_id').value = selected.value;
+            } else {
+                document.getElementById('ra').value = '';
+                document.getElementById('dec').value = '';
+                document.getElementById('gaia_id').value = '';
+            }
+        });
+    }
+
+    // Search form - usa endpoint dedicati per ogni catalogo
+    if (searchForm) {
+        searchForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(searchForm);
+            const catalog = formData.get('catalog');
+
+            const data = {
+                ra: parseFloat(formData.get('ra')),
+                dec: parseFloat(formData.get('dec')),
+                radius_arcsec: parseFloat(formData.get('radius')) || 5.0,
+                gaia_id: formData.get('gaia_id') || null
+            };
+
+            // Per OGLE usa radius_arcmin
+            if (catalog === 'ogle') {
+                data.radius_arcmin = data.radius_arcsec / 60;
+            }
+
+            searchBtn.disabled = true;
+            searchBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Ricerca in corso...';
+
+            try {
+                // Endpoint dedicato per catalogo
+                const url = `/agata/admin/api/catalogs/${catalog}/search`;
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    displayResults(result, catalog);
+                } else {
+                    showError(result.error || 'Errore durante la ricerca');
+                }
+            } catch (error) {
+                showError('Errore di connessione: ' + error.message);
+            } finally {
+                searchBtn.disabled = false;
+                searchBtn.innerHTML = '<i class="bi bi-search me-2"></i>Cerca nel Catalogo';
+            }
+        });
+    }
+
+    function displayResults(result, catalog) {
+        resultsCard.style.display = 'block';
+
+        const catalogName = catalog.toUpperCase();
+        let gaiaInfo = '';
+        if (result.gaia_id) {
+            gaiaInfo = `<br><strong>Gaia DR3 ID:</strong> <code>${result.gaia_id}</code>`;
+        }
+
+        let statusClass = result.success && result.point_count > 0 ? 'success' : 'warning';
+        let statusIcon = result.success && result.point_count > 0 ? 'check-circle' : 'exclamation-circle';
+
+        let extraInfo = '';
+
+        // Info specifiche per catalogo
+        if (catalog === 'tess' && result.tic_info) {
+            extraInfo = `
+                <div class="mt-2">
+                    <small class="text-muted">
+                        TIC ID: <code>${result.tic_id}</code><br>
+                        Tmag: ${result.tic_info.Tmag || 'N/A'}<br>
+                        Distanza: ${result.tic_info.distance_arcsec?.toFixed(2) || 'N/A'}"
+                    </small>
+                </div>
+            `;
+        }
+
+        if (result.star_id) {
+            extraInfo += `<div class="mt-2"><small class="text-muted">Star ID: <code>${result.star_id}</code></small></div>`;
+        }
+
+        if (result.band_stats && result.band_stats.counts) {
+            const bandInfo = Object.entries(result.band_stats.counts)
+                .map(([band, count]) => `${band}: ${count}`)
+                .join(', ');
+            extraInfo += `<div class="mt-2"><small class="text-muted">Bande: ${bandInfo}</small></div>`;
+        }
+
+        let html = `
+            <div class="alert alert-info mb-3">
+                <strong>Import ID: ${result.import_id}</strong> - Catalogo: <strong>${catalogName}</strong>
+                ${gaiaInfo}
+            </div>
+
+            <div class="card border-${statusClass}">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="bi bi-${statusIcon} text-${statusClass} me-2"></i>
+                        ${catalogName}
+                    </h5>
+                    <p class="mb-1"><strong>${result.point_count || 0}</strong> punti fotometrici</p>
+                    ${result.band ? `<small class="text-muted">Banda: ${result.band}</small><br>` : ''}
+                    ${result.time_range ? `<small class="text-muted">HJD: ${result.time_range.min?.toFixed(2) || 'N/A'} - ${result.time_range.max?.toFixed(2) || 'N/A'}</small><br>` : ''}
+                    ${result.mag_range ? `<small class="text-muted">Mag: ${result.mag_range.min?.toFixed(2) || 'N/A'} - ${result.mag_range.max?.toFixed(2) || 'N/A'}</small>` : ''}
+                    ${extraInfo}
+                    ${result.message ? `<div class="mt-2 text-muted small">${result.message}</div>` : ''}
+                </div>
+            </div>
+        `;
+
+        if (result.point_count > 0 && catalog !== 'tess') {
+            html += `
+                <div class="mt-3">
+                    <a href="/agata/admin/external-catalogs/${result.import_id}" class="btn btn-success">
+                        <i class="bi bi-download me-2"></i>Procedi con l'Import
+                    </a>
+                </div>
+            `;
+        } else if (catalog === 'tess') {
+            html += `
+                <div class="mt-3 alert alert-warning">
+                    <i class="bi bi-info-circle me-2"></i>
+                    TESS: Il download completo delle lightcurve non e' ancora implementato.
+                    I dati mostrati sono una preview delle osservazioni disponibili.
+                </div>
+            `;
+        }
+
+        // Preview dati se disponibili
+        if (result.preview && result.preview.length > 0) {
+            html += `
+                <div class="mt-3">
+                    <h6>Preview dati (primi ${result.preview.length} punti)</h6>
+                    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>HJD</th>
+                                    <th>Mag</th>
+                                    <th>Err</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${result.preview.slice(0, 20).map(row => `
+                                    <tr>
+                                        <td>${row.hjd?.toFixed(5) || 'N/A'}</td>
+                                        <td>${row.mag?.toFixed(3) || 'N/A'}</td>
+                                        <td>${row.mag_err?.toFixed(3) || '-'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        searchResults.innerHTML = html;
+    }
+
+    function showError(message) {
+        resultsCard.style.display = 'block';
+        searchResults.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                ${message}
+            </div>
+        `;
+    }
+});
+
+function refreshImports() {
+    location.reload();
+}
+
+// Upload form handling - usa nuovo endpoint
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadForm = document.getElementById('uploadForm');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const resultsCard = document.getElementById('resultsCard');
+    const searchResults = document.getElementById('searchResults');
+
+    if (uploadForm) {
+        uploadForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(uploadForm);
+
+            // Validazione
+            const file = formData.get('file');
+            const gaiaId = formData.get('gaia_id');
+
+            if (!file || file.size === 0) {
+                showUploadError('Seleziona un file');
+                return;
+            }
+
+            if (!gaiaId) {
+                showUploadError('Inserisci il Gaia ID');
+                return;
+            }
+
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Caricamento...';
+
+            try {
+                // Nuovo endpoint per file upload
+                const response = await fetch('/agata/admin/api/catalogs/file/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    displayUploadResult(result);
+                    uploadForm.reset();
+                } else {
+                    showUploadError(result.error || 'Errore durante il caricamento');
+                }
+            } catch (error) {
+                showUploadError('Errore di connessione: ' + error.message);
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = '<i class="bi bi-upload me-2"></i>Carica e Importa';
+            }
+        });
+    }
+
+    function displayUploadResult(result) {
+        resultsCard.style.display = 'block';
+
+        let projectInfo = '';
+        if (result.project_created) {
+            projectInfo = `
+                <div class="alert alert-info mt-3">
+                    <i class="bi bi-folder-plus me-2"></i>
+                    <strong>Progetto creato automaticamente!</strong><br>
+                    Codice: <a href="/agata/admin/projects/${result.project_id}" class="fw-bold">${result.project_code}</a><br>
+                    <small class="text-muted">Il progetto e' ora disponibile per l'assegnazione.</small>
+                </div>
+            `;
+        }
+
+        searchResults.innerHTML = `
+            <div class="alert alert-success mb-3">
+                <i class="bi bi-check-circle me-2"></i>
+                <strong>Import completato!</strong><br>
+                File: <code>${result.source_name}</code><br>
+                Punti importati: <strong>${result.points_imported}</strong>
+            </div>
+            ${projectInfo}
+            ${result.import_id ? `
+            <a href="/agata/admin/external-catalogs/${result.import_id}" class="btn btn-primary me-2">
+                <i class="bi bi-eye me-2"></i>Visualizza Import
+            </a>
+            ` : ''}
+            ${result.project_created ? `
+            <a href="/agata/admin/projects/${result.project_id}" class="btn btn-success">
+                <i class="bi bi-folder me-2"></i>Vai al Progetto
+            </a>
+            ` : ''}
+        `;
+    }
+
+    function showUploadError(message) {
+        resultsCard.style.display = 'block';
+        searchResults.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                ${message}
+            </div>
+        `;
+    }
+});
+
+// QLP Upload form handling
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadQlpForm = document.getElementById('uploadQlpForm');
+    const uploadQlpBtn = document.getElementById('uploadQlpBtn');
+    const resultsCard = document.getElementById('resultsCard');
+    const searchResults = document.getElementById('searchResults');
+
+    // Per admin/analyst: popola gaia_id dal dropdown
+    const qlpStarSelect = document.getElementById('qlp_star_select');
+    if (qlpStarSelect) {
+        qlpStarSelect.addEventListener('change', function() {
+            const gaiaIdInput = document.getElementById('qlp_gaia_id');
+            gaiaIdInput.value = this.value;
+        });
+    }
+
+    if (uploadQlpForm) {
+        uploadQlpForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(uploadQlpForm);
+
+            // Validazione
+            const file = formData.get('file');
+            const gaiaId = formData.get('gaia_id');
+
+            if (!file || file.size === 0) {
+                showQlpError('Seleziona un file');
+                return;
+            }
+
+            if (!gaiaId) {
+                showQlpError('Inserisci il Gaia ID');
+                return;
+            }
+
+            uploadQlpBtn.disabled = true;
+            uploadQlpBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Caricamento...';
+
+            try {
+                const response = await fetch('/agata/admin/api/catalogs/qlp/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    displayQlpResult(result);
+                    uploadQlpForm.reset();
+                } else {
+                    showQlpError(result.error || 'Errore durante il caricamento');
+                }
+            } catch (error) {
+                showQlpError('Errore di connessione: ' + error.message);
+            } finally {
+                uploadQlpBtn.disabled = false;
+                uploadQlpBtn.innerHTML = '<i class="bi bi-upload me-2"></i>Carica QLP';
+            }
+        });
+    }
+
+    function displayQlpResult(result) {
+        resultsCard.style.display = 'block';
+
+        let previewHtml = '';
+        if (result.preview && result.preview.length > 0) {
+            previewHtml = `
+                <div class="mt-3">
+                    <h6>Preview dati (primi ${result.preview.length} punti)</h6>
+                    <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>HJD</th>
+                                    <th>Flux</th>
+                                    <th>Flux Err</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${result.preview.map(row => `
+                                    <tr>
+                                        <td>${row.hjd?.toFixed(5) || 'N/A'}</td>
+                                        <td>${row.flux?.toFixed(2) || 'N/A'}</td>
+                                        <td>${row.flux_err?.toFixed(2) || '-'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        searchResults.innerHTML = `
+            <div class="alert alert-info mb-3">
+                <i class="bi bi-stars me-2"></i>
+                <strong>File QLP parsato!</strong><br>
+                File: <code>${result.catalog_name}</code><br>
+                Punti: <strong>${result.point_count}</strong>
+                ${result.sector ? ` | Settore: <strong>${result.sector}</strong>` : ''}
+            </div>
+
+            <div class="row">
+                <div class="col-6">
+                    <div class="card">
+                        <div class="card-header py-2">
+                            <small class="fw-bold">Time Range</small>
+                        </div>
+                        <div class="card-body py-2">
+                            <small>
+                                Min: ${result.time_range?.min?.toFixed(2) || 'N/A'}<br>
+                                Max: ${result.time_range?.max?.toFixed(2) || 'N/A'}<br>
+                                Span: ${result.time_range?.span_days?.toFixed(1) || 'N/A'} giorni
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card">
+                        <div class="card-header py-2">
+                            <small class="fw-bold">Flux Stats</small>
+                        </div>
+                        <div class="card-body py-2">
+                            <small>
+                                Median: ${result.flux_stats?.median?.toFixed(2) || 'N/A'}<br>
+                                Min: ${result.flux_stats?.min?.toFixed(2) || 'N/A'}<br>
+                                Max: ${result.flux_stats?.max?.toFixed(2) || 'N/A'}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            ${previewHtml}
+
+            <div class="alert alert-warning mt-3">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Prossimo passo:</strong> La conversione flusso → magnitudine non e' ancora implementata.
+                I dati sono stati parsati ma non importati nel database.
+            </div>
+        `;
+    }
+
+    function showQlpError(message) {
+        resultsCard.style.display = 'block';
+        searchResults.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                ${message}
+            </div>
+        `;
+    }
+});
+
+// Auto QLP Download form handling
+document.addEventListener('DOMContentLoaded', function() {
+    const autoQlpForm = document.getElementById('autoQlpForm');
+    const autoQlpSearchBtn = document.getElementById('autoQlpSearchBtn');
+    const autoQlpProgress = document.getElementById('autoQlpProgress');
+    const autoQlpProgressText = document.getElementById('autoQlpProgressText');
+    const autoQlpProgressDetails = document.getElementById('autoQlpProgressDetails');
+    const autoQlpSectorsResult = document.getElementById('autoQlpSectorsResult');
+    const autoQlpSectorsInfo = document.getElementById('autoQlpSectorsInfo');
+    const autoQlpSectorsList = document.getElementById('autoQlpSectorsList');
+    const resultsCard = document.getElementById('resultsCard');
+    const searchResults = document.getElementById('searchResults');
+
+    // Stato corrente (per memorizzare info TIC/Gaia tra step 1 e step 2)
+    let currentSearchData = null;
+
+    if (autoQlpForm) {
+        autoQlpForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(autoQlpForm);
+
+            // Prepara i dati per la richiesta
+            const data = {};
+
+            {% if is_superuser %}
+            data.gaia_id = formData.get('gaia_id');
+            if (!data.gaia_id) {
+                showAutoQlpError('Inserisci il Gaia ID');
+                return;
+            }
+            {% else %}
+            data.project_id = parseInt(formData.get('project_id'));
+            if (!data.project_id) {
+                showAutoQlpError('Seleziona un progetto');
+                return;
+            }
+            {% endif %}
+
+            // Nascondi risultati precedenti
+            autoQlpSectorsResult.style.display = 'none';
+            resultsCard.style.display = 'none';
+
+            // Mostra progress
+            autoQlpSearchBtn.disabled = true;
+            autoQlpSearchBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Ricerca...';
+            autoQlpProgress.style.display = 'block';
+            autoQlpProgressText.textContent = 'Step 1/2: Conversione Gaia → TIC...';
+            autoQlpProgressDetails.textContent = 'Interrogazione MAST Catalog (può richiedere 10-30 secondi)';
+
+            try {
+                // Step 1: cerca settori disponibili
+                const startTime = Date.now();
+
+                // Aggiorna progress dopo 5 secondi
+                const progressTimeout = setTimeout(() => {
+                    autoQlpProgressText.textContent = 'Step 1/2: Ricerca settori QLP...';
+                    autoQlpProgressDetails.textContent = 'Interrogazione archivio TESS su MAST...';
+                }, 5000);
+
+                const response = await fetch('/agata/admin/api/catalogs/tess/qlp/search-sectors', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                clearTimeout(progressTimeout);
+                const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentSearchData = result;
+                    autoQlpProgressText.textContent = `✓ Completato in ${elapsedTime}s`;
+                    autoQlpProgressDetails.textContent = `Trovati ${result.sectors.length} settori disponibili`;
+
+                    // Nascondi progress dopo 1 secondo e mostra risultati
+                    setTimeout(() => {
+                        autoQlpProgress.style.display = 'none';
+                        displaySectors(result);
+                    }, 1000);
+                } else {
+                    autoQlpProgress.style.display = 'none';
+                    showAutoQlpError(result.error || 'Errore durante la ricerca');
+                }
+            } catch (error) {
+                autoQlpProgress.style.display = 'none';
+                showAutoQlpError('Errore di connessione: ' + error.message);
+            } finally {
+                autoQlpSearchBtn.disabled = false;
+                autoQlpSearchBtn.innerHTML = '<i class="bi bi-search me-2"></i>Cerca Settori Disponibili';
+            }
+        });
+    }
+
+    function displaySectors(result) {
+        autoQlpSectorsResult.style.display = 'block';
+
+        // Info TIC/Gaia
+        autoQlpSectorsInfo.innerHTML = `
+            <strong>Gaia DR3 ID:</strong> <code>${result.gaia_id}</code><br>
+            <strong>TIC ID:</strong> <code>${result.tic_id}</code><br>
+            <strong>TESS Magnitude:</strong> ${result.tmag ? result.tmag.toFixed(3) : 'N/A'}<br>
+            <strong>Settori disponibili:</strong> ${result.sectors.length}
+        `;
+
+        // Lista settori con checkbox e informazioni dettagliate
+        let sectorsHtml = '<div class="list-group">';
+        for (const sectorInfo of result.sectors) {
+            // Formatta le date e durata
+            let infoText = '';
+
+            // Date leggibili
+            if (sectorInfo.date_start && sectorInfo.date_end) {
+                // Se inizio e fine sono nello stesso mese/anno, mostra una volta
+                if (sectorInfo.date_start === sectorInfo.date_end) {
+                    infoText += sectorInfo.date_start;
+                } else {
+                    infoText += `${sectorInfo.date_start} - ${sectorInfo.date_end}`;
+                }
+            }
+
+            // Durata
+            if (sectorInfo.duration_days) {
+                if (infoText) infoText += ' | ';
+                infoText += `${sectorInfo.duration_days} giorni`;
+            }
+
+            // HJD in piccolo (opzionale, per riferimento)
+            let hjdText = '';
+            if (sectorInfo.t_min && sectorInfo.t_max) {
+                hjdText = `HJD ${sectorInfo.t_min.toFixed(1)} - ${sectorInfo.t_max.toFixed(1)}`;
+            }
+
+            sectorsHtml += `
+                <div class="list-group-item">
+                    <div class="form-check">
+                        <input class="form-check-input sector-checkbox" type="checkbox"
+                               id="sector_${sectorInfo.sector}"
+                               data-sector="${sectorInfo.sector}"
+                               data-idx="${sectorInfo.idx}">
+                        <label class="form-check-label w-100" for="sector_${sectorInfo.sector}">
+                            <div>
+                                <strong>Settore ${sectorInfo.sector}</strong>
+                            </div>
+                            ${infoText ? `<small class="text-muted">${infoText}</small>` : ''}
+                            ${hjdText ? `<br><small class="text-muted" style="font-size: 0.75rem; opacity: 0.7;">${hjdText}</small>` : ''}
+                        </label>
+                    </div>
+                </div>
+            `;
+        }
+        sectorsHtml += '</div>';
+        autoQlpSectorsList.innerHTML = sectorsHtml;
+
+        // Mostra/nascondi bottone download in base alle selezioni
+        const downloadBtn = document.getElementById('autoQlpDownloadBtn');
+        document.querySelectorAll('.sector-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const anyChecked = document.querySelectorAll('.sector-checkbox:checked').length > 0;
+                downloadBtn.style.display = anyChecked ? 'block' : 'none';
+            });
+        });
+
+        // Event listener per bottone download
+        downloadBtn.onclick = downloadSelectedSectors;
+    }
+
+    async function downloadSelectedSectors() {
+        const checkedBoxes = document.querySelectorAll('.sector-checkbox:checked');
+        if (checkedBoxes.length === 0) {
+            showAutoQlpError('Seleziona almeno un settore');
+            return;
+        }
+
+        if (!currentSearchData) {
+            showAutoQlpError('Dati di ricerca non disponibili, riprova la ricerca');
+            return;
+        }
+
+        // Prepara lista settori da scaricare
+        const sectorsToDownload = [];
+        checkedBoxes.forEach(checkbox => {
+            sectorsToDownload.push({
+                sector: parseInt(checkbox.dataset.sector),
+                idx: parseInt(checkbox.dataset.idx)
+            });
+        });
+
+        // Nascondi lista settori e bottone
+        document.getElementById('autoQlpSectorsList').style.display = 'none';
+        document.getElementById('autoQlpDownloadBtn').style.display = 'none';
+
+        // Mostra progress multiplo
+        const multiProgress = document.getElementById('autoQlpMultiProgress');
+        const multiProgressList = document.getElementById('autoQlpMultiProgressList');
+        multiProgress.style.display = 'block';
+
+        // Crea lista progress per ogni settore
+        let progressHtml = '';
+        for (const {sector} of sectorsToDownload) {
+            progressHtml += `
+                <div class="mb-2" id="progress_sector_${sector}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <strong>Settore ${sector}</strong>
+                        <span class="badge bg-secondary" id="status_sector_${sector}">In attesa...</span>
+                    </div>
+                    <div class="progress mt-1" style="height: 5px;">
+                        <div class="progress-bar" id="progressbar_sector_${sector}" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <small class="text-muted" id="details_sector_${sector}"></small>
+                </div>
+            `;
+        }
+        multiProgressList.innerHTML = progressHtml;
+
+        // Scarica settori uno per uno
+        let successCount = 0;
+        let errorCount = 0;
+        const results = [];
+
+        for (let i = 0; i < sectorsToDownload.length; i++) {
+            const {sector, idx} = sectorsToDownload[i];
+
+            // Aggiorna status
+            const statusBadge = document.getElementById(`status_sector_${sector}`);
+            const progressBar = document.getElementById(`progressbar_sector_${sector}`);
+            const details = document.getElementById(`details_sector_${sector}`);
+
+            statusBadge.textContent = `Download... (${i+1}/${sectorsToDownload.length})`;
+            statusBadge.className = 'badge bg-primary';
+            progressBar.style.width = '50%';
+
+            try {
+                const result = await downloadSectorSimple(sector, idx, (msg) => {
+                    details.textContent = msg;
+                });
+
+                if (result.success) {
+                    successCount++;
+                    statusBadge.textContent = '✓ Completato';
+                    statusBadge.className = 'badge bg-success';
+                    progressBar.style.width = '100%';
+                    progressBar.className = 'progress-bar bg-success';
+                    details.textContent = `${result.points_imported} punti importati`;
+                    results.push(result);
+                } else {
+                    errorCount++;
+                    statusBadge.textContent = '✗ Errore';
+                    statusBadge.className = 'badge bg-danger';
+                    progressBar.style.width = '100%';
+                    progressBar.className = 'progress-bar bg-danger';
+                    details.textContent = result.error || 'Errore sconosciuto';
+                }
+            } catch (error) {
+                errorCount++;
+                statusBadge.textContent = '✗ Errore';
+                statusBadge.className = 'badge bg-danger';
+                progressBar.style.width = '100%';
+                progressBar.className = 'progress-bar bg-danger';
+                details.textContent = error.message;
+            }
+        }
+
+        // Mostra riepilogo finale
+        setTimeout(() => {
+            displayMultiDownloadSummary(successCount, errorCount, results);
+        }, 1500);
+    }
+
+    async function downloadSectorSimple(sector, sectorIdx, onProgress) {
+        if (onProgress) onProgress('Download FITS da MAST...');
+
+        const response = await fetch('/agata/admin/api/catalogs/tess/qlp/download-sector', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                gaia_id: currentSearchData.gaia_id,
+                tic_id: currentSearchData.tic_id,
+                sector: sector,
+                sector_idx: sectorIdx
+            })
+        });
+
+        const result = await response.json();
+
+        if (onProgress && result.success) {
+            onProgress('Processing completato');
+        }
+
+        return result;
+    }
+
+    function displayMultiDownloadSummary(successCount, errorCount, results) {
+        resultsCard.style.display = 'block';
+
+        const totalPoints = results.reduce((sum, r) => sum + (r.points_imported || 0), 0);
+
+        let sectorsHtml = '';
+        if (results.length > 0) {
+            sectorsHtml = '<div class="list-group list-group-flush mt-3">';
+            for (const result of results) {
+                sectorsHtml += `
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between">
+                            <span><strong>Settore ${result.sector}</strong></span>
+                            <span class="badge bg-success">${result.points_imported} punti</span>
+                        </div>
+                        <small class="text-muted">
+                            ${result.curve_used} | ${result.data_kind === 'mag' ? 'Magnitudine' : 'Flusso'} |
+                            <a href="/agata/admin/external-catalogs/${result.import_id}">Visualizza import</a>
+                        </small>
+                    </div>
+                `;
+            }
+            sectorsHtml += '</div>';
+        }
+
+        searchResults.innerHTML = `
+            <div class="alert ${errorCount > 0 ? 'alert-warning' : 'alert-success'} mb-3">
+                <i class="bi bi-${errorCount > 0 ? 'exclamation-triangle' : 'check-circle'} me-2"></i>
+                <strong>Download multiplo completato!</strong><br>
+                Settori scaricati con successo: <strong>${successCount}</strong><br>
+                Settori falliti: <strong>${errorCount}</strong><br>
+                Totale punti importati: <strong>${totalPoints}</strong>
+            </div>
+
+            <div class="mb-3">
+                <h6>Dettaglio Settori</h6>
+                ${sectorsHtml}
+            </div>
+        `;
+
+        // Nascondi progress e reset form
+        document.getElementById('autoQlpMultiProgress').style.display = 'none';
+        document.getElementById('autoQlpSectorsResult').style.display = 'none';
+        if (autoQlpForm) autoQlpForm.reset();
+    }
+
+    async function downloadSector(sector, sectorIdx) {
+        if (!currentSearchData) {
+            showAutoQlpError('Dati di ricerca non disponibili, riprova la ricerca');
+            return;
+        }
+
+        // Disabilita tutti i bottoni settore
+        document.querySelectorAll('.btn-sector').forEach(btn => {
+            btn.disabled = true;
+        });
+
+        // Mostra spinner sul bottone cliccato
+        const clickedBtn = document.querySelector(`.btn-sector[data-sector="${sector}"]`);
+        const originalHtml = clickedBtn.innerHTML;
+        clickedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Download...';
+
+        // Mostra progress dettagliato
+        const autoQlpProgress = document.getElementById('autoQlpProgress');
+        const autoQlpProgressText = document.getElementById('autoQlpProgressText');
+        const autoQlpProgressDetails = document.getElementById('autoQlpProgressDetails');
+
+        autoQlpProgress.style.display = 'block';
+        autoQlpProgressText.textContent = `Step 2/2: Download settore ${sector}...`;
+        autoQlpProgressDetails.textContent = 'Download FITS da MAST (10-60 secondi a seconda della dimensione)';
+
+        try {
+            const startTime = Date.now();
+
+            // Aggiorna progress dopo 15 secondi
+            const progressTimeout1 = setTimeout(() => {
+                autoQlpProgressDetails.textContent = 'Processing con ingest_qlp_core...';
+            }, 15000);
+
+            // Aggiorna progress dopo 30 secondi
+            const progressTimeout2 = setTimeout(() => {
+                autoQlpProgressDetails.textContent = 'Salvataggio dati nel database...';
+            }, 30000);
+
+            // Step 2: download e import settore
+            const response = await fetch('/agata/admin/api/catalogs/tess/qlp/download-sector', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    gaia_id: currentSearchData.gaia_id,
+                    tic_id: currentSearchData.tic_id,
+                    sector: sector,
+                    sector_idx: sectorIdx
+                })
+            });
+
+            clearTimeout(progressTimeout1);
+            clearTimeout(progressTimeout2);
+            const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
+
+            const result = await response.json();
+
+            if (result.success) {
+                autoQlpProgressText.textContent = `✓ Completato in ${elapsedTime}s`;
+                autoQlpProgressDetails.textContent = `${result.points_imported} punti importati`;
+
+                // Nascondi progress dopo 1.5 secondi e mostra risultati
+                setTimeout(() => {
+                    autoQlpProgress.style.display = 'none';
+                    displayDownloadResult(result);
+                    // Nascondi i settori dopo il successo
+                    autoQlpSectorsResult.style.display = 'none';
+                    // Reset form
+                    autoQlpForm.reset();
+                }, 1500);
+            } else {
+                autoQlpProgress.style.display = 'none';
+                showAutoQlpError(result.error || 'Errore durante il download');
+            }
+        } catch (error) {
+            autoQlpProgress.style.display = 'none';
+            showAutoQlpError('Errore di connessione: ' + error.message);
+        } finally {
+            // Riabilita bottoni
+            document.querySelectorAll('.btn-sector').forEach(btn => {
+                btn.disabled = false;
+            });
+            clickedBtn.innerHTML = originalHtml;
+        }
+    }
+
+    function displayDownloadResult(result) {
+        resultsCard.style.display = 'block';
+
+        searchResults.innerHTML = `
+            <div class="alert alert-success mb-3">
+                <i class="bi bi-check-circle me-2"></i>
+                <strong>Import TESS QLP completato!</strong><br>
+                Settore: <strong>${result.sector}</strong><br>
+                Punti importati: <strong>${result.points_imported}</strong><br>
+                Curva utilizzata: <code>${result.curve_used}</code><br>
+                Tipo dati: <strong>${result.data_kind === 'mag' ? 'Magnitudine' : 'Flusso'}</strong>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-6">
+                    <div class="card">
+                        <div class="card-header py-2">
+                            <small class="fw-bold">Info Stella</small>
+                        </div>
+                        <div class="card-body py-2">
+                            <small>
+                                Gaia ID: <code>${result.gaia_id}</code><br>
+                                TIC ID: <code>${result.tic_id}</code><br>
+                                Catalogo: ${result.source_name}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card">
+                        <div class="card-header py-2">
+                            <small class="fw-bold">Dati Importati</small>
+                        </div>
+                        <div class="card-body py-2">
+                            <small>
+                                Time range: ${result.time_range.min.toFixed(2)} - ${result.time_range.max.toFixed(2)}<br>
+                                ${result.data_kind === 'mag' ? 'Mag' : 'Flux'} range: ${result.mag_range.min.toFixed(3)} - ${result.mag_range.max.toFixed(3)}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <a href="/agata/admin/external-catalogs/${result.import_id}" class="btn btn-primary">
+                <i class="bi bi-eye me-2"></i>Visualizza Import
+            </a>
+        `;
+    }
+
+    function showAutoQlpError(message) {
+        resultsCard.style.display = 'block';
+        searchResults.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                ${message}
+            </div>
+        `;
+    }
+});
+
+// Auto ASAS-SN Download form handling
+document.addEventListener('DOMContentLoaded', function() {
+    const autoAsassnForm = document.getElementById('autoAsassnForm');
+    const autoAsassnSearchBtn = document.getElementById('autoAsassnSearchBtn');
+    const autoAsassnProgress = document.getElementById('autoAsassnProgress');
+    const autoAsassnProgressText = document.getElementById('autoAsassnProgressText');
+    const autoAsassnProgressDetails = document.getElementById('autoAsassnProgressDetails');
+    const resultsCard = document.getElementById('resultsCard');
+    const searchResults = document.getElementById('searchResults');
+
+    if (autoAsassnForm) {
+        autoAsassnForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(autoAsassnForm);
+
+            // Prepara i dati per la richiesta
+            const data = {};
+
+            {% if is_superuser %}
+            data.gaia_id = formData.get('gaia_id');
+            if (!data.gaia_id) {
+                showAsassnError('Inserisci il Gaia ID');
+                return;
+            }
+            {% else %}
+            data.project_id = parseInt(formData.get('project_id'));
+            if (!data.project_id) {
+                showAsassnError('Seleziona un progetto');
+                return;
+            }
+            {% endif %}
+
+            // Nascondi risultati precedenti
+            resultsCard.style.display = 'none';
+
+            // Mostra progress
+            autoAsassnSearchBtn.disabled = true;
+            autoAsassnSearchBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Elaborazione...';
+            autoAsassnProgress.style.display = 'block';
+            autoAsassnProgressText.textContent = 'Step 1/3: Conversione Gaia → Coordinate...';
+            autoAsassnProgressDetails.textContent = 'Risoluzione Gaia ID da archivio...';
+
+            try {
+                const startTime = Date.now();
+
+                // Timeout per aggiornare progress
+                const progressTimeout1 = setTimeout(() => {
+                    autoAsassnProgressText.textContent = 'Step 2/3: Query ASAS-SN Sky Patrol...';
+                    autoAsassnProgressDetails.textContent = 'Interrogazione database ASAS-SN (può richiedere 30-60 secondi)';
+                }, 3000);
+
+                const progressTimeout2 = setTimeout(() => {
+                    autoAsassnProgressText.textContent = 'Step 3/3: Import dati nel database...';
+                    autoAsassnProgressDetails.textContent = 'Salvataggio punti fotometrici...';
+                }, 20000);
+
+                // Chiamata diretta all'endpoint download (che fa sia search che import)
+                const response = await fetch('/agata/admin/api/catalogs/asassn/auto/download-data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                clearTimeout(progressTimeout1);
+                clearTimeout(progressTimeout2);
+                const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
+
+                const result = await response.json();
+
+                if (result.success) {
+                    autoAsassnProgressText.textContent = `✓ Completato in ${elapsedTime}s`;
+                    autoAsassnProgressDetails.textContent = `${result.points_imported} punti importati`;
+
+                    // Nascondi progress dopo 1.5 secondi e mostra risultati
+                    setTimeout(() => {
+                        autoAsassnProgress.style.display = 'none';
+                        displayAsassnResult(result);
+                        // Reset form
+                        autoAsassnForm.reset();
+                    }, 1500);
+                } else {
+                    autoAsassnProgress.style.display = 'none';
+                    showAsassnError(result.error || 'Errore durante il download');
+                }
+            } catch (error) {
+                autoAsassnProgress.style.display = 'none';
+                showAsassnError('Errore di connessione: ' + error.message);
+            } finally {
+                autoAsassnSearchBtn.disabled = false;
+                autoAsassnSearchBtn.innerHTML = '<i class="bi bi-search me-2"></i>Cerca e Scarica Dati ASAS-SN';
+            }
+        });
+    }
+
+    function displayAsassnResult(result) {
+        resultsCard.style.display = 'block';
+
+        const projectInfo = result.project_code
+            ? `<br><strong>Progetto linkato:</strong> <a href="/agata/admin/projects/${result.project_id}">${result.project_code}</a>`
+            : '';
+
+        searchResults.innerHTML = `
+            <div class="alert alert-success mb-3">
+                <i class="bi bi-check-circle me-2"></i>
+                <strong>Import ASAS-SN completato!</strong><br>
+                Punti importati: <strong>${result.points_imported}</strong><br>
+                Banda: <strong>${result.band}</strong>${projectInfo}
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-6">
+                    <div class="card">
+                        <div class="card-header py-2">
+                            <small class="fw-bold">Info Stella</small>
+                        </div>
+                        <div class="card-body py-2">
+                            <small>
+                                Gaia ID: <code>${result.gaia_id}</code><br>
+                                Catalogo: ASAS-SN (Sky Patrol)
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card">
+                        <div class="card-header py-2">
+                            <small class="fw-bold">Dati Importati</small>
+                        </div>
+                        <div class="card-body py-2">
+                            <small>
+                                Time range (HJD): ${result.time_range.min.toFixed(2)} - ${result.time_range.max.toFixed(2)}<br>
+                                Mag range: ${result.mag_range.min.toFixed(3)} - ${result.mag_range.max.toFixed(3)}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <a href="/agata/admin/external-catalogs/${result.import_id}" class="btn btn-primary">
+                <i class="bi bi-eye me-2"></i>Visualizza Import
+            </a>
+        `;
+    }
+
+    function showAsassnError(message) {
+        resultsCard.style.display = 'block';
+        searchResults.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                ${message}
+            </div>
+        `;
+    }
+});
+</script>
+{% endblock %}

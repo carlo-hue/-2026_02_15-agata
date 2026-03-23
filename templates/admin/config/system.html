@@ -1,0 +1,40 @@
+{% extends "admin/base.html" %}
+{% block title %}Configurazioni - AGATA Admin{% endblock %}
+{% block page_title %}Configurazioni Sistema{% endblock %}
+{% block content %}
+<div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle"></i> <strong>Solo Superuser:</strong> Modifiche alle configurazioni influenzano tutto il sistema.
+</div>
+
+<div class="card">
+    <div class="card-header bg-white">
+        <h6 class="mb-0"><i class="bi bi-gear me-2"></i>Configurazioni</h6>
+    </div>
+    <div class="card-body">
+        {% if configs %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Chiave</th>
+                    <th>Valore</th>
+                    <th>Descrizione</th>
+                    <th>Aggiornato</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for key, config in configs.items() %}
+                <tr>
+                    <td><code>{{ config.config_key }}</code></td>
+                    <td>{{ config.config_value }}</td>
+                    <td class="small text-muted">{{ config.description or '-' }}</td>
+                    <td class="small text-muted">{{ config.updated_at.strftime('%Y-%m-%d %H:%M') if config.updated_at else 'N/A' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">Nessuna configurazione presente. Le configurazioni possono essere aggiunte tramite API.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
