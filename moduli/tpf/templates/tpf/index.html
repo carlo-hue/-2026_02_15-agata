@@ -13,9 +13,9 @@
         class="page-shell"
         data-run-url="{{ url_for('tpf.run_api') }}"
         data-save-url="{{ url_for('tpf.save_api') }}"
-        data-initial-gaia-source-id="{{ initial_gaia_source_id }}"
-        data-source-context="{{ source_context }}"
-        data-entry-mode="{{ entry_mode }}"
+        data-mode="{{ page_context.mode }}"
+        data-gaia-source-id="{{ page_context.gaia_source_id }}"
+        data-source-context="{{ page_context.source_context }}"
     >
         <section class="hero-panel">
             <h1>{{ module_title }}</h1>
@@ -27,26 +27,24 @@
             <h2>Contesto di integrazione</h2>
             <div class="info-grid integration-grid">
                 <div>
-                    <span class="k">Modalita' di apertura</span>
-                    <span class="v">
-                        {% if entry_mode == 'incoming-params' %}
-                        Apertura con parametri in ingresso
-                        {% else %}
-                        Apertura autonoma
-                        {% endif %}
-                    </span>
+                    <span class="k">Modalita'</span>
+                    <span class="v">{{ page_context.mode }}</span>
                 </div>
                 <div>
-                    <span class="k">gaia_source_id da URL</span>
-                    <span class="v mono">{{ initial_gaia_source_id or '-' }}</span>
+                    <span class="k">gaia_source_id iniziale</span>
+                    <span class="v mono">{{ page_context.gaia_source_id or '-' }}</span>
                 </div>
                 <div>
                     <span class="k">source_context</span>
-                    <span class="v">{{ source_context or '-' }}</span>
+                    <span class="v">{{ page_context.source_context or '-' }}</span>
                 </div>
             </div>
             <p class="form-hint">
-                Il modulo puo' essere aperto direttamente oppure richiamato da altri componenti AGATA tramite parametri URL.
+                {% if page_context.mode == 'integrated' %}
+                Modalita' <strong>integrated</strong>: il modulo e' stato aperto da un altro componente AGATA con un contesto chiamante esplicito.
+                {% else %}
+                Modalita' <strong>standalone</strong>: il modulo e' stato aperto direttamente, senza contesto chiamante.
+                {% endif %}
                 La pipeline non parte automaticamente: conferma sempre con <strong>Run</strong>.
             </p>
         </section>
@@ -60,14 +58,14 @@
                         id="gaiaSourceIdInput"
                         name="gaia_source_id"
                         type="text"
-                        value="{{ initial_gaia_source_id }}"
+                        value="{{ page_context.gaia_source_id }}"
                         placeholder="es. 5853498713190525696"
                         autocomplete="off"
                     >
                     <button type="submit" id="runButton">Run</button>
                     <button type="button" id="saveButton" class="button-secondary" disabled>Salva sessione</button>
                 </div>
-                <p class="form-hint">Inserisci un Gaia DR3 source_id valido e avvia la pipeline. Il salvataggio resta in modalita' stub.</p>
+                <p class="form-hint">Input standard del modulo: <code>gaia_source_id</code> come parametro principale e <code>source_context</code> come metadato opzionale di integrazione.</p>
             </form>
         </section>
 
@@ -102,15 +100,35 @@
         </section>
 
         <section class="panel">
-            <h2>Payload di ritorno AGATA</h2>
+            <h2>AGATA Return Payload</h2>
             <pre id="returnPayloadBox" class="output-box">{
-  "status": "ok",
-  "message": "Nessun risultato pronto"
+  "component": "tpf",
+  "mode": "{{ page_context.mode }}",
+  "source_context": {{ 'null' if not page_context.source_context else '"' + page_context.source_context + '"' }},
+  "input": {
+    "gaia_source_id": {{ 'null' if not page_context.gaia_source_id else '"' + page_context.gaia_source_id + '"' }}
+  },
+  "result": {
+    "status": "not-ready",
+    "target": null,
+    "tpf": {
+      "available": false,
+      "mode": null
+    },
+    "lightcurve": {
+      "available": false,
+      "mode": null
+    },
+    "save": {
+      "mode": null,
+      "saved": false
+    }
+  }
 }</pre>
         </section>
 
         <section class="panel">
-            <h2>Output JSON</h2>
+            <h2>Output JSON Tecnico</h2>
             <pre id="output" class="output-box">{}</pre>
         </section>
     </main>

@@ -14,6 +14,17 @@ def _json_error(message: str, status_code: int = 400):
     return jsonify({"status": "error", "message": message}), status_code
 
 
+def _build_page_context(args) -> dict:
+    gaia_source_id = str(args.get("gaia_source_id", "")).strip()
+    source_context = str(args.get("source_context", "")).strip()
+    mode = "integrated" if source_context else "standalone"
+    return {
+        "mode": mode,
+        "gaia_source_id": gaia_source_id,
+        "source_context": source_context,
+    }
+
+
 def create_blueprint() -> Blueprint:
     bp = Blueprint(
         "tpf",
@@ -25,16 +36,12 @@ def create_blueprint() -> Blueprint:
 
     @bp.get("/")
     def index():
-        initial_gaia_source_id = str(request.args.get("gaia_source_id", "")).strip()
-        source_context = str(request.args.get("source_context", "")).strip()
-        entry_mode = "incoming-params" if (initial_gaia_source_id or source_context) else "standalone"
+        page_context = _build_page_context(request.args)
         return render_template(
             "tpf/index.html",
             module_title=settings.module_title,
             scaffold_message=settings.placeholder_message,
-            initial_gaia_source_id=initial_gaia_source_id,
-            source_context=source_context,
-            entry_mode=entry_mode,
+            page_context=page_context,
         )
 
     @bp.get("/health")

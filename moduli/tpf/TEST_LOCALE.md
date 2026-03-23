@@ -1,5 +1,35 @@
 ﻿# Test Locale TPF
 
+## Input standard del modulo
+
+Il contratto applicativo minimo del modulo `tpf` prevede:
+
+- `gaia_source_id`: input principale
+- `source_context`: input opzionale di integrazione applicativa
+
+## Modalita' supportate
+
+### standalone
+
+Il modulo e' aperto direttamente, senza contesto chiamante.
+
+Esempio:
+
+```text
+/tpf/
+/tpf/?gaia_source_id=5853498713190525696
+```
+
+### integrated
+
+Il modulo e' aperto da un altro componente AGATA e riceve un `source_context` esplicito.
+
+Esempio:
+
+```text
+/tpf/?gaia_source_id=5853498713190525696&source_context=tce
+```
+
 ## Prerequisiti
 
 - Python disponibile da terminale
@@ -8,8 +38,6 @@
 - Connessione di rete disponibile verso Gaia DR3 per il ramo reale di `/tpf/api/run`
 
 ## Avvio rapido
-
-Apri PowerShell, posizionati nella root del repo AGATA e avvia il modulo locale:
 
 ```powershell
 cd "C:\Users\CarloMarino\OneDrive - camarino59\OneDrive\CODICE\2026_02_15-agata"
@@ -23,65 +51,28 @@ cd "C:\Users\CarloMarino\OneDrive - camarino59\OneDrive\CODICE\2026_02_15-agata"
 py -m moduli.tpf.run
 ```
 
-All'avvio il server stampa in console gli URL principali del modulo.
-
 ## URL utili
 
-- UI autonoma: `http://127.0.0.1:5010/tpf/`
-- UI con gaia_source_id da URL: `http://127.0.0.1:5010/tpf/?gaia_source_id=5853498713190525696`
-- UI con contesto applicativo: `http://127.0.0.1:5010/tpf/?gaia_source_id=5853498713190525696&source_context=tce`
+- UI standalone: `http://127.0.0.1:5010/tpf/`
+- UI standalone con input precompilato: `http://127.0.0.1:5010/tpf/?gaia_source_id=5853498713190525696`
+- UI integrated: `http://127.0.0.1:5010/tpf/?gaia_source_id=5853498713190525696&source_context=tce`
 - Health: `http://127.0.0.1:5010/tpf/health`
 - API run: `http://127.0.0.1:5010/tpf/api/run`
 - API save: `http://127.0.0.1:5010/tpf/api/save`
 
-## Esempio di Gaia source_id
-
-Per una prova iniziale usa un Gaia DR3 source_id numerico, ad esempio:
-
-- `5853498713190525696`
-
 ## Cosa aspettarsi nella UI
-
-### `/tpf/`
 
 La pagina mostra:
 
-- form con campo `gaia_source_id`
-- bottone `Run`
-- bottone `Salva sessione`, disabilitato finche' non c'e' un risultato valido
-- sezione stato
-- sezione target
-- preview TPF come heatmap Plotly
-- sezione light curve
-- output JSON formattato
-- preview separata del payload di ritorno AGATA
+- input `gaia_source_id`
+- modalita' corrente: `standalone` oppure `integrated`
+- `source_context`, se presente
+- preview TPF
+- stato salvataggio
+- output JSON tecnico completo
+- sezione separata `AGATA Return Payload`
 
-### Apertura con query parameter
-
-Se apri:
-
-```text
-/tpf/?gaia_source_id=5853498713190525696&source_context=tce
-```
-
-la UI:
-
-- precompila il campo `gaia_source_id`
-- mostra il `source_context`
-- indica che il modulo e' stato aperto con parametri in ingresso
-- non lancia automaticamente la pipeline
-
-### `/tpf/health`
-
-Risposta attesa:
-
-```json
-{
-  "status": "ok",
-  "message": "TPF component healthy",
-  "component": "tpf"
-}
-```
+La pipeline non parte automaticamente anche quando `gaia_source_id` arriva via query parameter.
 
 ## Esempio chiamata API `/tpf/api/run`
 
@@ -90,62 +81,54 @@ $body = @{ gaia_source_id = '5853498713190525696'; source_context = 'tce' } | Co
 Invoke-RestMethod -Uri 'http://127.0.0.1:5010/tpf/api/run' -Method Post -ContentType 'application/json' -Body $body
 ```
 
-## Esempio risposta `/tpf/api/run`
+## Payload di ritorno applicativo
+
+Il frontend costruisce un payload sintetico e stabile tramite:
+
+```javascript
+buildAgataReturnPayload(lastRunResult, pageContext)
+```
+
+Struttura:
 
 ```json
 {
-  "status": "ok",
-  "message": "Pipeline TPF completata correttamente.",
-  "mode": "preview",
+  "component": "tpf",
+  "mode": "standalone",
+  "source_context": null,
   "input": {
     "gaia_source_id": "5853498713190525696"
   },
-  "target": {
-    "gaia_source_id": "5853498713190525696",
-    "ra_deg": 0.0,
-    "dec_deg": 0.0,
-    "gmag": 12.3,
-    "catalog": "Gaia DR3"
-  },
-  "tpf": {
+  "result": {
     "status": "ok",
-    "available": true,
-    "mode": "preview",
-    "message": "Preview TPF derivata da Gaia DR3: heatmap sintetica basata su target e stelle vicine.",
-    "flux_grid": [[0.0]]
-  },
-  "lightcurve": {
-    "status": "ok",
-    "available": false,
-    "mode": "placeholder",
-    "message": "Light curve non ancora disponibile in questa fase.",
-    "time": [],
-    "flux": []
+    "target": {
+      "gaia_source_id": "5853498713190525696",
+      "catalog": "Gaia DR3",
+      "ra_deg": 0.0,
+      "dec_deg": 0.0,
+      "gmag": 12.3
+    },
+    "tpf": {
+      "available": true,
+      "mode": "preview"
+    },
+    "lightcurve": {
+      "available": false,
+      "mode": "placeholder"
+    },
+    "save": {
+      "mode": "stub",
+      "saved": true
+    }
   }
 }
 ```
 
-## Esempio chiamata API `/tpf/api/save`
+Questo payload:
 
-```powershell
-$payload = @{
-  input = @{ gaia_source_id = '5853498713190525696' }
-  target = @{ gaia_source_id = '5853498713190525696'; label = 'demo' }
-  tpf = @{ available = $true }
-  lightcurve = @{ available = $false }
-  agata_context = @{ entry_mode = 'incoming-params'; source_context = 'tce' }
-} | ConvertTo-Json -Depth 6
-Invoke-RestMethod -Uri 'http://127.0.0.1:5010/tpf/api/save' -Method Post -ContentType 'application/json' -Body $payload
-```
-
-## Integrazione con altri moduli AGATA
-
-Il meccanismo standard di ingresso ora e':
-
-- query parameter `gaia_source_id`
-- query parameter opzionale `source_context`
-
-Il frontend prepara anche un payload di ritorno applicativo, mostrato in pagina come anteprima, pensato come punto di estensione per futuri richiami da altri moduli AGATA.
+- e' distinto dal JSON tecnico completo della pipeline
+- e' mostrato in pagina
+- non viene ancora inviato automaticamente ad altri moduli
 
 ## Troubleshooting base
 

@@ -21,12 +21,15 @@
         return;
     }
 
-    const appContext = {
+    const endpointUrls = {
         runUrl: appRoot.dataset.runUrl || "/tpf/api/run",
         saveUrl: appRoot.dataset.saveUrl || "/tpf/api/save",
-        initialGaiaSourceId: appRoot.dataset.initialGaiaSourceId || "",
-        sourceContext: appRoot.dataset.sourceContext || "",
-        entryMode: appRoot.dataset.entryMode || "standalone",
+    };
+
+    const pageContext = {
+        mode: appRoot.dataset.mode || "standalone",
+        gaia_source_id: appRoot.dataset.gaiaSourceId || "",
+        source_context: appRoot.dataset.sourceContext || null,
     };
 
     function setStatus(message, tone) {
@@ -150,61 +153,56 @@
         }
     }
 
-    function buildAgataReturnPayload(result) {
-        if (!result || result.status !== "ok") {
-            return {
-                status: "ok",
-                message: "Nessun risultato pronto",
-                agata_context: {
-                    entry_mode: appContext.entryMode,
-                    source_context: appContext.sourceContext || null,
-                },
-            };
-        }
+    function buildAgataReturnPayload(result, context) {
+        const gaiaSourceId = result && result.input && result.input.gaia_source_id
+            ? result.input.gaia_source_id
+            : (context.gaia_source_id || null);
 
         return {
-            status: "ok",
-            message: "Payload di ritorno AGATA pronto",
-            agata_context: {
-                entry_mode: appContext.entryMode,
-                source_context: appContext.sourceContext || null,
-            },
+            component: "tpf",
+            mode: context.mode,
+            source_context: context.source_context || null,
             input: {
-                gaia_source_id: result.input && result.input.gaia_source_id ? result.input.gaia_source_id : null,
+                gaia_source_id: gaiaSourceId,
             },
-            target_summary: result.target ? {
-                gaia_source_id: result.target.gaia_source_id || null,
-                catalog: result.target.catalog || null,
-                ra_deg: result.target.ra_deg ?? null,
-                dec_deg: result.target.dec_deg ?? null,
-                gmag: result.target.gmag ?? null,
-            } : null,
-            availability: {
-                tpf: !!(result.tpf && result.tpf.available),
-                lightcurve: !!(result.lightcurve && result.lightcurve.available),
+            result: {
+                status: result && result.status ? result.status : "not-ready",
+                target: result && result.target ? {
+                    gaia_source_id: result.target.gaia_source_id || null,
+                    catalog: result.target.catalog || null,
+                    ra_deg: result.target.ra_deg ?? null,
+                    dec_deg: result.target.dec_deg ?? null,
+                    gmag: result.target.gmag ?? null,
+                } : null,
+                tpf: {
+                    available: !!(result && result.tpf && result.tpf.available),
+                    mode: result && result.tpf ? (result.tpf.mode || null) : null,
+                },
+                lightcurve: {
+                    available: !!(result && result.lightcurve && result.lightcurve.available),
+                    mode: result && result.lightcurve ? (result.lightcurve.mode || null) : null,
+                },
+                save: {
+                    mode: result && result.save ? (result.save.mode || null) : null,
+                    saved: !!(result && result.save && result.save.saved),
+                },
             },
-            save_summary: result.save ? {
-                mode: result.save.mode || null,
-                saved: !!result.save.saved,
-                save_id: result.save.save_id || null,
-                saved_at_utc: result.save.saved_at_utc || null,
-            } : null,
         };
     }
 
     function renderReturnPayloadPreview(result) {
-        returnPayloadBox.textContent = JSON.stringify(buildAgataReturnPayload(result), null, 2);
+        returnPayloadBox.textContent = JSON.stringify(buildAgataReturnPayload(result, pageContext), null, 2);
     }
 
     async function runPipeline(gaiaSourceId) {
-        const response = await fetch(appContext.runUrl, {
+        const response = await fetch(endpointUrls.runUrl, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
                 gaia_source_id: gaiaSourceId,
-                source_context: appContext.sourceContext || null,
+                source_context: pageContext.source_context,
             }),
         });
         const data = await response.json().catch(() => ({ status: "error", message: "Risposta JSON non valida" }));
@@ -244,12 +242,9 @@
         try {
             const payloadToSave = {
                 ...lastRunResult,
-                agata_context: {
-                    entry_mode: appContext.entryMode,
-                    source_context: appContext.sourceContext || null,
-                },
+                agata_context: pageContext,
             };
-            const response = await fetch(appContext.saveUrl, {
+            const response = await fetch(endpointUrls.saveUrl, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -290,6 +285,7 @@
     form.addEventListener("submit", async function (event) {
         event.preventDefault();
         const gaiaSourceId = String(input.value || "").trim();
+        pageContext.gaia_source_id = gaiaSourceId;
         setError("");
         setStatus("Loading... esecuzione pipeline in corso.", "status-neutral");
         setSaveStatus("Nessun salvataggio eseguito.", "status-neutral");
