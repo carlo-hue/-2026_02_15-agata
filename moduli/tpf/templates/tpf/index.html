@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
@@ -15,12 +15,13 @@
         data-save-url="{{ url_for('tpf.save_api') }}"
         data-mode="{{ page_context.mode }}"
         data-gaia-source-id="{{ page_context.gaia_source_id }}"
+        data-sector="{{ page_context.sector }}"
         data-source-context="{{ page_context.source_context }}"
     >
         <section class="hero-panel">
             <h1>{{ module_title }}</h1>
             <p class="lead">{{ scaffold_message }}</p>
-            <p class="meta">Demo interna del modulo TPF con pipeline minima Gaia DR3, preview TPF e salvataggio stub.</p>
+            <p class="meta">Editor TPF con pipeline Gaia DR3, lookup deterministico del file reale locale tramite <code>gaia_source_id + sector</code>, maschere automatiche iniziali, editing manuale pixel e fallback a preview sintetica.</p>
         </section>
 
         <section class="panel panel-integration">
@@ -35,17 +36,21 @@
                     <span class="v mono">{{ page_context.gaia_source_id or '-' }}</span>
                 </div>
                 <div>
+                    <span class="k">sector iniziale</span>
+                    <span class="v mono">{{ page_context.sector or '-' }}</span>
+                </div>
+                <div>
                     <span class="k">source_context</span>
                     <span class="v">{{ page_context.source_context or '-' }}</span>
                 </div>
             </div>
             <p class="form-hint">
                 {% if page_context.mode == 'integrated' %}
-                Modalita' <strong>integrated</strong>: il modulo e' stato aperto da un altro componente AGATA con un contesto chiamante esplicito.
+                Modalita' <strong>integrated</strong>: l'editor TPF e' stato aperto da un altro componente AGATA con contesto chiamante esplicito.
                 {% else %}
-                Modalita' <strong>standalone</strong>: il modulo e' stato aperto direttamente, senza contesto chiamante.
+                Modalita' <strong>standalone</strong>: l'editor TPF e' stato aperto direttamente, senza contesto chiamante.
                 {% endif %}
-                La pipeline non parte automaticamente: conferma sempre con <strong>Run</strong>.
+                Se il TPF reale e' disponibile, puoi modificare manualmente foreground/background e ricalcolare la light curve.
             </p>
         </section>
 
@@ -53,19 +58,27 @@
             <h2>Input</h2>
             <form id="tpfForm" class="tpf-form" novalidate>
                 <label for="gaiaSourceIdInput">gaia_source_id (DR3)</label>
-                <div class="input-row">
+                <div class="input-row input-row-primary">
                     <input
                         id="gaiaSourceIdInput"
                         name="gaia_source_id"
                         type="text"
                         value="{{ page_context.gaia_source_id }}"
-                        placeholder="es. 5853498713190525696"
+                        placeholder="es. 1996211639964641280"
+                        autocomplete="off"
+                    >
+                    <input
+                        id="sectorInput"
+                        name="sector"
+                        type="text"
+                        value="{{ page_context.sector }}"
+                        placeholder="sector es. 57"
                         autocomplete="off"
                     >
                     <button type="submit" id="runButton">Run</button>
                     <button type="button" id="saveButton" class="button-secondary" disabled>Salva sessione</button>
                 </div>
-                <p class="form-hint">Input standard del modulo: <code>gaia_source_id</code> come parametro principale e <code>source_context</code> come metadato opzionale di integrazione.</p>
+                <p class="form-hint">Input standard dell'editor TPF: <code>gaia_source_id</code> e <code>sector</code> sono richiesti; <code>source_context</code> resta opzionale.</p>
             </form>
         </section>
 
@@ -88,7 +101,16 @@
 
             <section class="panel">
                 <h2>TPF</h2>
-                <div id="tpfInfo" class="panel-note">TPF non ancora richiesta.</div>
+                <div id="tpfInfo" class="panel-note">TPF non ancora richiesto.</div>
+                <div id="overlayInfo" class="overlay-info">Overlay target/Gaia non ancora disponibile.</div>
+                <div class="edit-toolbar">
+                    <button type="button" id="gaiaOverlayToggleButton" class="overlay-toggle-button">Gaia overlay ON</button>
+                    <button type="button" id="targetModeButton" class="edit-mode-button is-active" disabled>Target</button>
+                    <button type="button" id="backgroundModeButton" class="edit-mode-button" disabled>Background</button>
+                    <button type="button" id="recalcButton" class="button-secondary" disabled>Ricalcola light curve</button>
+                </div>
+                <div id="editInfo" class="edit-info">Editing pixel disponibile solo con TPF reale.</div>
+                <div id="maskInfo" class="mask-info">Selezione automatica foreground/background non ancora disponibile.</div>
                 <div id="tpfPlot" class="plot-box"></div>
             </section>
 
@@ -106,7 +128,8 @@
   "mode": "{{ page_context.mode }}",
   "source_context": {{ 'null' if not page_context.source_context else '"' + page_context.source_context + '"' }},
   "input": {
-    "gaia_source_id": {{ 'null' if not page_context.gaia_source_id else '"' + page_context.gaia_source_id + '"' }}
+    "gaia_source_id": {{ 'null' if not page_context.gaia_source_id else '"' + page_context.gaia_source_id + '"' }},
+    "sector": {{ 'null' if not page_context.sector else page_context.sector }}
   },
   "result": {
     "status": "not-ready",

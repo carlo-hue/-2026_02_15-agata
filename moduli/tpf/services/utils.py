@@ -10,6 +10,15 @@ def validate_gaia_source_id(value: str) -> str:
     return normalized
 
 
+def validate_sector(value) -> int:
+    normalized = str(value or "").strip()
+    if not normalized:
+        raise ValueError("sector mancante")
+    if not normalized.isdigit():
+        raise ValueError("sector non valido")
+    return int(normalized)
+
+
 def rounded_or_none(value, digits: int = 6):
     if value is None:
         return None
@@ -17,6 +26,28 @@ def rounded_or_none(value, digits: int = 6):
         return round(float(value), digits)
     except (TypeError, ValueError):
         return None
+
+
+def point_is_inside_grid(x, y, shape: tuple[int, int] | list[int]) -> bool:
+    try:
+        rows = int(shape[0])
+        cols = int(shape[1])
+        px = float(x)
+        py = float(y)
+    except (TypeError, ValueError, IndexError):
+        return False
+    return -0.5 <= px <= (cols - 0.5) and -0.5 <= py <= (rows - 0.5)
+
+
+def build_overlay_source_entry(source_id, x, y, gmag, ra=None, dec=None) -> dict:
+    return {
+        "source_id": str(source_id),
+        "x": rounded_or_none(x, 3),
+        "y": rounded_or_none(y, 3),
+        "gmag": rounded_or_none(gmag, 4),
+        "ra_deg": rounded_or_none(ra, 6),
+        "dec_deg": rounded_or_none(dec, 6),
+    }
 
 
 def build_nearby_source_entry(

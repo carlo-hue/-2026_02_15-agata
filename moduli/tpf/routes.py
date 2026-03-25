@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import logging
 
@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, render_template, request
 
 from .config import settings
 from .services import run_tpf_pipeline, save_tpf_session_stub
+from .services.utils import validate_sector
 
 LOGGER = logging.getLogger(__name__)
 
@@ -16,11 +17,13 @@ def _json_error(message: str, status_code: int = 400):
 
 def _build_page_context(args) -> dict:
     gaia_source_id = str(args.get("gaia_source_id", "")).strip()
+    sector_raw = str(args.get("sector", "")).strip()
     source_context = str(args.get("source_context", "")).strip()
     mode = "integrated" if source_context else "standalone"
     return {
         "mode": mode,
         "gaia_source_id": gaia_source_id,
+        "sector": sector_raw,
         "source_context": source_context,
     }
 
@@ -59,17 +62,29 @@ def create_blueprint() -> Blueprint:
             return _json_error("payload JSON non valido", 400)
 
         gaia_source_id = str(payload.get("gaia_source_id", "")).strip()
+        sector_raw = payload.get("sector", "")
+        masks = payload.get("masks") if isinstance(payload.get("masks"), dict) else None
         if not gaia_source_id:
             return _json_error("gaia_source_id mancante", 400)
 
-        LOGGER.info("TPF pipeline requested for gaia_source_id=%s", gaia_source_id)
         try:
-            result = run_tpf_pipeline(gaia_source_id)
+            sector = validate_sector(sector_raw)
         except ValueError as err:
-            LOGGER.warning("TPF pipeline validation error for %s: %s", gaia_source_id, err)
+            return _json_error(str(err), 400)
+
+        LOGGER.info(
+            "TPF pipeline requested for gaia_source_id=%s sector=%s manual_masks=%s",
+            gaia_source_id,
+            sector,
+            bool(masks),
+        )
+        try:
+            result = run_tpf_pipeline(gaia_source_id, sector, masks=masks)
+        except ValueError as err:
+            LOGGER.warning("TPF pipeline validation error for %s sector=%s: %s", gaia_source_id, sector, err)
             return _json_error(str(err), 400)
         except Exception as err:
-            LOGGER.exception("TPF pipeline failed for gaia_source_id=%s", gaia_source_id)
+            LOGGER.exception("TPF pipeline failed for gaia_source_id=%s sector=%s", gaia_source_id, sector)
             return _json_error(str(err), 502)
         return jsonify(result)
 
@@ -80,17 +95,19 @@ def create_blueprint() -> Blueprint:
             return _json_error("payload di salvataggio mancante", 400)
 
         gaia_source_id = "-"
+        sector = "-"
         if isinstance(payload.get("input"), dict):
             gaia_source_id = str(payload["input"].get("gaia_source_id") or "-")
-        LOGGER.info("TPF save requested for gaia_source_id=%s", gaia_source_id)
+            sector = str(payload["input"].get("sector") or "-")
+        LOGGER.info("TPF save requested for gaia_source_id=%s sector=%s", gaia_source_id, sector)
 
         try:
             result = save_tpf_session_stub(payload)
         except ValueError as err:
-            LOGGER.warning("TPF save validation error for %s: %s", gaia_source_id, err)
+            LOGGER.warning("TPF save validation error for %s sector=%s: %s", gaia_source_id, sector, err)
             return _json_error(str(err), 400)
         except Exception as err:
-            LOGGER.exception("TPF save failed for gaia_source_id=%s", gaia_source_id)
+            LOGGER.exception("TPF save failed for gaia_source_id=%s sector=%s", gaia_source_id, sector)
             return _json_error(str(err), 502)
         return jsonify(result)
 

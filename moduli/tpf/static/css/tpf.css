@@ -1,4 +1,4 @@
-﻿:root {
+:root {
     --tpf-bg: #eef3f8;
     --tpf-surface: #ffffff;
     --tpf-border: #d8e2ee;
@@ -81,7 +81,7 @@ h2 {
 
 .input-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) minmax(140px, 180px) auto auto;
     gap: 0.7rem;
     align-items: center;
 }
@@ -105,7 +105,10 @@ h2 {
     box-shadow: 0 0 0 3px rgba(47, 126, 216, 0.12);
 }
 
-.tpf-form button {
+.tpf-form button,
+.edit-mode-button,
+.overlay-toggle-button,
+.button-secondary {
     padding: 0.75rem 1.1rem;
     border: 0;
     border-radius: 10px;
@@ -113,14 +116,27 @@ h2 {
     color: #fff;
     font-weight: 600;
     cursor: pointer;
-    transition: opacity 0.15s ease;
+    transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
+.button-secondary,
 .tpf-form .button-secondary {
     background: #5d738a;
 }
 
-.tpf-form button:disabled {
+.overlay-toggle-button {
+    background: #35506b;
+}
+
+.overlay-toggle-button.is-off {
+    background: #94a3b8;
+    color: #f8fafc;
+}
+
+.tpf-form button:disabled,
+.edit-mode-button:disabled,
+.overlay-toggle-button:disabled,
+.button-secondary:disabled {
     cursor: not-allowed;
     opacity: 0.55;
 }
@@ -190,6 +206,36 @@ h2 {
 .empty-state,
 .panel-note {
     color: var(--tpf-muted);
+}
+
+.edit-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin: 0.8rem 0 0.6rem;
+}
+
+.edit-mode-button {
+    background: #dbe6f2;
+    color: #35506b;
+}
+
+.edit-mode-button.is-active {
+    background: #2f7ed8;
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+.overlay-info,
+.edit-info,
+.mask-info {
+    margin: 0.6rem 0 0.75rem;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid var(--tpf-border);
+    border-radius: 10px;
+    background: #f8fbff;
+    color: var(--tpf-text);
+    font-size: 0.92rem;
 }
 
 .plot-box {
