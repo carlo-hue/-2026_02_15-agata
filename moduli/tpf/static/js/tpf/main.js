@@ -9,6 +9,10 @@
     const targetModeButton = document.getElementById("targetModeButton");
     const backgroundModeButton = document.getElementById("backgroundModeButton");
     const recalcButton = document.getElementById("recalcButton");
+    const frameSlider = document.getElementById("frameSlider");
+    const frameIndexLabel = document.getElementById("frameIndexLabel");
+    const frameTimeLabel = document.getElementById("frameTimeLabel");
+    const frameInfo = document.getElementById("frameInfo");
     const statusBox = document.getElementById("statusBox");
     const saveStatusBox = document.getElementById("saveStatusBox");
     const errorBox = document.getElementById("errorBox");
@@ -34,8 +38,19 @@
     let editMode = "target";
     let editingEnabled = false;
     let gaiaOverlayEnabled = true;
+    let currentFrameIndex = 0;
+    let tpfFrames = [];
+    let tpfFrameTimes = [];
+    let lightcurveFrameIndices = [];
 
-    if (!appRoot || !form || !gaiaSourceIdInput || !sectorInput || !runButton || !saveButton || !gaiaOverlayToggleButton || !targetModeButton || !backgroundModeButton || !recalcButton || !statusBox || !saveStatusBox || !errorBox || !output || !returnPayloadBox || !targetInfo || !tpfInfo || !tpfHeaderMeta || !overlayInfo || !tpfDetailsInfo || !overlayDetailsInfo || !editInfo || !maskInfo || !lightcurveInfo || !tpfPlot || !lightcurvePlot) {
+    if (
+        !appRoot || !form || !gaiaSourceIdInput || !sectorInput || !runButton || !saveButton
+        || !gaiaOverlayToggleButton || !targetModeButton || !backgroundModeButton || !recalcButton
+        || !frameSlider || !frameIndexLabel || !frameTimeLabel || !frameInfo
+        || !statusBox || !saveStatusBox || !errorBox || !output || !returnPayloadBox || !targetInfo
+        || !tpfInfo || !tpfHeaderMeta || !overlayInfo || !tpfDetailsInfo || !overlayDetailsInfo
+        || !editInfo || !maskInfo || !lightcurveInfo || !tpfPlot || !lightcurvePlot
+    ) {
         return;
     }
 
@@ -150,8 +165,24 @@
         Plotly.purge(tpfPlot);
         Plotly.purge(lightcurvePlot);
         tpfPlot.__maskClickBound = false;
+        lightcurvePlot.__lightcurveClickBound = false;
         tpfPlot.innerHTML = "";
         lightcurvePlot.innerHTML = "";
+    }
+
+    function resetFrameState() {
+        currentFrameIndex = 0;
+        tpfFrames = [];
+        tpfFrameTimes = [];
+        lightcurveFrameIndices = [];
+        frameSlider.min = "0";
+        frameSlider.max = "0";
+        frameSlider.step = "1";
+        frameSlider.value = "0";
+        frameSlider.disabled = true;
+        frameIndexLabel.textContent = "Frame: - / -";
+        frameTimeLabel.textContent = "Time: -";
+        frameInfo.textContent = "Navigazione frame disponibile solo con TPF reale.";
     }
 
     function resetSections() {
@@ -165,6 +196,7 @@
         maskInfo.classList.remove("warning");
         lightcurveInfo.textContent = "Light curve non ancora richiesta.";
         editInfo.textContent = "Editing pixel disponibile solo con TPF reale.";
+        resetFrameState();
     }
 
     function renderTarget(target) {
@@ -183,6 +215,70 @@
         `;
     }
 
+    function getFrameCount() {
+        return Array.isArray(tpfFrames) ? tpfFrames.length : 0;
+    }
+
+    function clampFrameIndex(index) {
+        const count = getFrameCount();
+        if (count <= 0) {
+            return 0;
+        }
+        const numeric = Number.isFinite(index) ? index : parseInt(index, 10);
+        if (!Number.isFinite(numeric)) {
+            return 0;
+        }
+        return Math.min(count - 1, Math.max(0, Math.round(numeric)));
+    }
+
+    function getCurrentFrameGrid(tpf) {
+        if (tpf && tpf.frames && tpf.frames.available && getFrameCount() > 0) {
+            return tpfFrames[clampFrameIndex(currentFrameIndex)];
+        }
+        return tpf && Array.isArray(tpf.flux_grid) ? tpf.flux_grid : null;
+    }
+
+    function findLightcurvePointIndexForFrame(frameIndex) {
+        if (Array.isArray(lightcurveFrameIndices) && lightcurveFrameIndices.length) {
+            const directIndex = lightcurveFrameIndices.indexOf(frameIndex);
+            if (directIndex >= 0) {
+                return directIndex;
+            }
+            return -1;
+        }
+
+        if (lastRunResult && lastRunResult.lightcurve && Array.isArray(lastRunResult.lightcurve.time)) {
+            return frameIndex < lastRunResult.lightcurve.time.length ? frameIndex : -1;
+        }
+        return -1;
+    }
+
+    function updateFrameControls(tpf) {
+        const frames = tpf && tpf.frames ? tpf.frames : null;
+        if (!frames || !frames.available || getFrameCount() === 0) {
+            frameSlider.disabled = true;
+            frameIndexLabel.textContent = "Frame: - / -";
+            frameTimeLabel.textContent = "Time: -";
+            frameInfo.textContent = (frames && frames.message) || "Navigazione frame disponibile solo con TPF reale.";
+            return;
+        }
+
+        const safeIndex = clampFrameIndex(currentFrameIndex);
+        currentFrameIndex = safeIndex;
+        const count = getFrameCount();
+        const currentTime = Array.isArray(tpfFrameTimes) && tpfFrameTimes[safeIndex] !== undefined
+            ? tpfFrameTimes[safeIndex]
+            : "-";
+
+        frameSlider.disabled = false;
+        frameSlider.min = "0";
+        frameSlider.max = String(Math.max(0, count - 1));
+        frameSlider.step = "1";
+        frameSlider.value = String(safeIndex);
+        frameIndexLabel.textContent = `Frame: ${safeIndex + 1} / ${count}`;
+        frameTimeLabel.textContent = `Time: ${currentTime}`;
+        frameInfo.textContent = `Frame reale corrente: ${safeIndex + 1}/${count} | Time=${currentTime} | ${frames.message || "Clicca un punto della light curve per vedere il frame corrispondente."}`;
+    }
     function handleTpfPlotClick(eventData) {
         if (!editingEnabled || !lastRunResult || !lastRunResult.tpf || lastRunResult.tpf.mode !== "real") {
             return;
@@ -216,7 +312,7 @@
         }
 
         renderCurrentTpfState();
-        editInfo.textContent = `Maschere modificate in UI. Modalita' attiva: ${editMode}. Premi \"Ricalcola light curve\" per aggiornare il grafico.`;
+        editInfo.textContent = `Modalita' editing attiva: ${editMode}. Clicca un pixel del TPF per modificarlo e poi premi "Ricalcola light curve".`;
     }
 
     function buildMaskShapes(maskMatrix, kind) {
@@ -391,7 +487,7 @@
         }
 
         const layout = {
-            title: "TPF Flux Grid",
+            title: getFrameCount() > 0 ? `TPF Flux Grid | frame ${clampFrameIndex(currentFrameIndex) + 1}` : "TPF Flux Grid",
             margin: { t: 40, r: 20, b: 40, l: 40 },
             xaxis: { title: "Pixel X", constrain: "domain" },
             yaxis: { title: "Pixel Y", autorange: "reversed", scaleanchor: "x", scaleratio: 1 },
@@ -406,25 +502,62 @@
         });
     }
 
+    function handleLightcurveClick(eventData) {
+        const point = eventData && eventData.points && eventData.points[0] ? eventData.points[0] : null;
+        if (!point || typeof point.pointIndex !== "number") {
+            return;
+        }
+        const clickedIndex = point.pointIndex;
+        const targetFrameIndex = Array.isArray(lightcurveFrameIndices) && lightcurveFrameIndices.length
+            ? lightcurveFrameIndices[clickedIndex]
+            : clickedIndex;
+        setCurrentFrameIndex(targetFrameIndex);
+    }
+
     function renderLightcurve(lightcurve) {
+        lightcurvePlot.__lightcurveClickBound = false;
         const time = Array.isArray(lightcurve.time) ? lightcurve.time : [];
         const corrected = Array.isArray(lightcurve.corrected_flux) ? lightcurve.corrected_flux : (Array.isArray(lightcurve.flux) ? lightcurve.flux : []);
-        const trace = {
+        const traces = [{
             x: time,
             y: corrected,
             mode: "lines",
             name: "Corrected Flux",
             line: { color: "#2f7ed8", width: 2 },
-        };
+        }];
+
+        const highlightIndex = findLightcurvePointIndexForFrame(clampFrameIndex(currentFrameIndex));
+        if (highlightIndex >= 0 && highlightIndex < time.length && highlightIndex < corrected.length) {
+            traces.push({
+                x: [time[highlightIndex]],
+                y: [corrected[highlightIndex]],
+                mode: "markers",
+                name: "Frame corrente",
+                marker: {
+                    size: 9,
+                    color: "#ef4444",
+                    line: {
+                        color: "#ffffff",
+                        width: 1.5,
+                    },
+                },
+                hovertemplate: "Frame corrente<br>time=%{x}<br>flux=%{y}<extra></extra>",
+            });
+        }
+
         const layout = {
             title: "Light Curve Corretta",
             margin: { t: 40, r: 20, b: 40, l: 50 },
             xaxis: { title: "Time" },
             yaxis: { title: "Corrected Flux" },
         };
-        Plotly.newPlot(lightcurvePlot, [trace], layout, { responsive: true, displayModeBar: false });
+        Plotly.newPlot(lightcurvePlot, traces, layout, { responsive: true, displayModeBar: false }).then(function () {
+            if (!lightcurvePlot.__lightcurveClickBound && typeof lightcurvePlot.on === "function") {
+                lightcurvePlot.on("plotly_click", handleLightcurveClick);
+                lightcurvePlot.__lightcurveClickBound = true;
+            }
+        });
     }
-
     function formatTpfInfo(tpf) {
         if (!tpf) {
             return "TPF non disponibile.";
@@ -433,7 +566,7 @@
         if (tpf.message) parts.push(tpf.message);
         if (tpf.mode) parts.push(`mode=${tpf.mode}`);
         if (tpf.source && tpf.source.type) parts.push(`source=${tpf.source.type}`);
-        if (Array.isArray(tpf.shape)) parts.push(`shape=${tpf.shape.join('x')}`);
+        if (Array.isArray(tpf.shape)) parts.push(`shape=${tpf.shape.join("x")}`);
         if (tpf.metadata && tpf.metadata.sector !== undefined && tpf.metadata.sector !== null) parts.push(`sector=${tpf.metadata.sector}`);
         if (tpf.metadata && tpf.metadata.camera !== undefined && tpf.metadata.camera !== null) parts.push(`camera=${tpf.metadata.camera}`);
         if (tpf.metadata && tpf.metadata.ccd !== undefined && tpf.metadata.ccd !== null) parts.push(`ccd=${tpf.metadata.ccd}`);
@@ -495,7 +628,7 @@
         targetModeButton.classList.toggle("is-active", editMode === "target");
         backgroundModeButton.classList.toggle("is-active", editMode === "background");
         if (editingEnabled) {
-            editInfo.textContent = `Modalita' editing attiva: ${editMode}. Clicca un pixel del TPF per modificarlo e poi premi \"Ricalcola light curve\".`;
+            editInfo.textContent = `Modalita' editing attiva: ${editMode}. Clicca un pixel del TPF per modificarlo e poi premi "Ricalcola light curve".`;
         }
     }
 
@@ -512,7 +645,7 @@
             backgroundModeButton.title = reason;
             recalcButton.title = reason;
         } else {
-            editInfo.textContent = `Modalita' editing attiva: ${editMode}. Clicca un pixel del TPF per modificarlo e poi premi \"Ricalcola light curve\".`;
+            editInfo.textContent = `Modalita' editing attiva: ${editMode}. Clicca un pixel del TPF per modificarlo e poi premi "Ricalcola light curve".`;
             targetModeButton.title = "Modalita' editing target attiva.";
             backgroundModeButton.title = "Modalita' editing background attiva.";
             recalcButton.title = "Ricalcola la light curve usando le maschere correnti.";
@@ -538,6 +671,26 @@
         updateEditingControls();
     }
 
+    function syncFrameStateFromResult(result) {
+        const tpf = result && result.tpf ? result.tpf : null;
+        const frames = tpf && tpf.frames ? tpf.frames : null;
+        if (frames && frames.available && Array.isArray(frames.grids) && frames.grids.length) {
+            tpfFrames = frames.grids;
+            tpfFrameTimes = Array.isArray(frames.time) ? frames.time : [];
+            currentFrameIndex = clampFrameIndex(frames.initial_index || 0);
+        } else {
+            tpfFrames = [];
+            tpfFrameTimes = [];
+            currentFrameIndex = 0;
+        }
+
+        if (result && result.lightcurve && Array.isArray(result.lightcurve.frame_indices)) {
+            lightcurveFrameIndices = result.lightcurve.frame_indices.slice();
+        } else {
+            lightcurveFrameIndices = [];
+        }
+    }
+
     function buildCurrentTpfView() {
         if (!lastRunResult || !lastRunResult.tpf) {
             return null;
@@ -547,15 +700,16 @@
         }
         return {
             ...lastRunResult.tpf,
-            masks: buildCurrentMasksPayload("manual-ui", "Maschere modificate in UI. Premi \"Ricalcola light curve\" per aggiornare la curva."),
+            masks: buildCurrentMasksPayload("manual-ui", 'Premi "Ricalcola light curve" per aggiornare la curva.'),
         };
     }
 
     function renderCurrentTpfState() {
         const tpf = buildCurrentTpfView();
-        if (!tpf || !Array.isArray(tpf.flux_grid)) {
+        if (!tpf) {
             return;
         }
+
         updateGaiaOverlayToggleButton();
         tpfHeaderMeta.textContent = formatTpfHeaderMeta(lastRunResult);
         tpfInfo.textContent = formatTpfInfo(tpf);
@@ -564,12 +718,20 @@
         overlayDetailsInfo.textContent = overlayInfo.textContent;
         maskInfo.textContent = formatMaskInfo(tpf);
         maskInfo.classList.toggle("warning", masksNeedRecalc());
-        renderTPF(tpf.flux_grid, tpf.masks || null);
+        updateFrameControls(tpf);
+
+        const currentGrid = getCurrentFrameGrid(tpf);
+        if (Array.isArray(currentGrid)) {
+            renderTPF(currentGrid, tpf.masks || null);
+        } else {
+            Plotly.purge(tpfPlot);
+            tpfPlot.innerHTML = "";
+        }
     }
 
     function updateSections(data) {
         renderTarget(data.target || null);
-        if (data.tpf && data.tpf.available && Array.isArray(data.tpf.flux_grid)) {
+        if (data.tpf && data.tpf.available && (Array.isArray(data.tpf.flux_grid) || (data.tpf.frames && data.tpf.frames.available))) {
             renderCurrentTpfState();
         } else {
             tpfHeaderMeta.textContent = formatTpfHeaderMeta(data);
@@ -579,6 +741,7 @@
             overlayDetailsInfo.textContent = overlayInfo.textContent;
             maskInfo.textContent = formatMaskInfo(data.tpf);
             maskInfo.classList.toggle("warning", masksNeedRecalc());
+            updateFrameControls(data.tpf || null);
             Plotly.purge(tpfPlot);
             tpfPlot.innerHTML = "";
         }
@@ -627,6 +790,11 @@
                         ccd: result.tpf.metadata.ccd ?? null,
                         tessmag: result.tpf.metadata.tessmag ?? null,
                         ticid: result.tpf.metadata.ticid ?? null,
+                    } : null,
+                    frames: result && result.tpf && result.tpf.frames ? {
+                        available: !!result.tpf.frames.available,
+                        count: result.tpf.frames.count ?? 0,
+                        current_index: getFrameCount() > 0 ? clampFrameIndex(currentFrameIndex) : null,
                     } : null,
                     overlay: result && result.tpf && result.tpf.overlay ? {
                         target_position: result.tpf.overlay.target_position || null,
@@ -677,6 +845,7 @@
         lastRunResult = data;
         saveButton.disabled = false;
         syncMasksFromResult(data);
+        syncFrameStateFromResult(data);
         const tpfAvailable = !!(data.tpf && data.tpf.available);
         const lcAvailable = !!(data.lightcurve && data.lightcurve.available);
         setStatus(
@@ -738,6 +907,18 @@
             saveButton.disabled = !lastRunResult;
         }
     }
+    function setCurrentFrameIndex(nextIndex) {
+        const clampedIndex = clampFrameIndex(nextIndex);
+        currentFrameIndex = clampedIndex;
+        if (!lastRunResult) {
+            updateFrameControls(null);
+            return;
+        }
+        renderCurrentTpfState();
+        if (lastRunResult.lightcurve && lastRunResult.lightcurve.available) {
+            renderLightcurve(lastRunResult.lightcurve);
+        }
+    }
 
     form.addEventListener("submit", async function (event) {
         event.preventDefault();
@@ -757,6 +938,7 @@
         editingEnabled = false;
         saveButton.disabled = true;
         updateEditingControls();
+        resetFrameState();
         setButtonBusy(runButton, "Loading...", true);
         clearPlots();
         resetSections();
@@ -832,6 +1014,16 @@
         gaiaOverlayEnabled = !gaiaOverlayEnabled;
         updateGaiaOverlayToggleButton();
         renderCurrentTpfState();
+        if (lastRunResult && lastRunResult.lightcurve && lastRunResult.lightcurve.available) {
+            renderLightcurve(lastRunResult.lightcurve);
+        }
+    });
+
+    frameSlider.addEventListener("input", function () {
+        if (frameSlider.disabled) {
+            return;
+        }
+        setCurrentFrameIndex(parseInt(frameSlider.value, 10));
     });
 
     saveButton.addEventListener("click", function () {

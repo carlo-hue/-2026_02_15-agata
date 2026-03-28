@@ -80,6 +80,8 @@ Ora l'utente puo' anche:
 - cliccare sui pixel del TPF
 - modificare manualmente le maschere
 - premere `Ricalcola light curve`
+- usare lo slider frame per navigare il TPF reale cadence per cadence
+- cliccare un punto della light curve per vedere il frame corrispondente
 
 Regole di editing:
 
@@ -88,6 +90,25 @@ Regole di editing:
 - le due maschere restano mutuamente esclusive
 
 Il backend valida le maschere ricevute e ricalcola la light curve usando quelle nuove.
+
+## Navigazione temporale del TPF
+
+Quando il TPF reale e' disponibile, il backend espone anche:
+
+- i frame serializzati del cubo `FLUX`
+- l'array `time`
+- l'indice iniziale del frame mostrato
+- la mappa `frame_indices` della light curve reale
+
+In UI:
+
+- compare uno slider `Frame`
+- viene mostrato `Frame: i / N`
+- viene mostrato `Time: ...`
+- il TPF visualizza il frame corrente, non solo la mediana riassuntiva
+- cliccando un punto della light curve si seleziona il frame corrispondente
+
+Le maschere foreground/background, il target e l'overlay Gaia restano visibili su ogni frame.
 
 ## Overlay target e sorgenti Gaia
 
@@ -144,6 +165,9 @@ La pagina mostra:
 - TPF reale locale quando disponibile
 - marker del target sul TPF
 - marker delle sorgenti Gaia nel campo TPF
+- slider frame attivo sul TPF reale
+- etichetta con indice frame e tempo corrente
+- click sulla light curve che sincronizza il frame mostrato nel TPF
 - pulsante `Gaia overlay ON/OFF` utile quando le stelle Gaia rendono difficile il click sui pixel
 - overlay foreground in rosso sul TPF
 - overlay background in bianco sul TPF
@@ -165,13 +189,16 @@ Flusso suggerito:
 1. Esegui `Run`
 2. Verifica che il TPF sia `mode = real`
 3. Verifica che compaiano foreground/background automatici
-4. Scegli `Target` oppure `Background`
-5. Clicca alcuni pixel sulla heatmap
-6. Premi `Ricalcola light curve`
+4. Muovi lo slider `Frame` e verifica che il TPF cambi cadence
+5. Clicca un punto della light curve e verifica che il TPF salti al frame corretto
+6. Scegli `Target` oppure `Background`
+7. Clicca alcuni pixel sulla heatmap
+8. Premi `Ricalcola light curve`
 7. Verifica:
    - aggiornamento del riepilogo pixel
    - aggiornamento del grafico light curve
    - messaggio `Light curve aggiornata`
+   - slider frame ancora attivo e coerente
 
 ## Come testare il caso preview sintetica
 
@@ -183,6 +210,7 @@ Usa una combinazione valida lato Gaia ma senza file locale corrispondente, ad es
 Esito atteso:
 
 - `tpf.mode = "preview"`
+- slider frame disabilitato
 - editing pixel disabilitato
 - `Ricalcola light curve` disabilitato
 - light curve non disponibile con messaggio esplicito

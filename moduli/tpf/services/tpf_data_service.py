@@ -44,6 +44,38 @@ def _build_flux_grid_from_cube(flux_cube: np.ndarray) -> list[list[float]]:
     return np.round(grid, 3).tolist()
 
 
+def _build_serialized_frames(flux_cube: np.ndarray, time_values: np.ndarray) -> dict:
+    cube = np.asarray(flux_cube, dtype=float)
+    times = np.asarray(time_values, dtype=float)
+    if cube.ndim != 3:
+        return {
+            "available": False,
+            "count": 0,
+            "time": [],
+            "grids": [],
+            "initial_index": 0,
+            "message": "Frame TPF non disponibili.",
+        }
+
+    serialized_grids: list[list[list[float]]] = []
+    valid_indices: list[int] = []
+    for index, frame in enumerate(cube):
+        frame = np.nan_to_num(np.asarray(frame, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+        serialized_grids.append(np.round(frame, 3).tolist())
+        if np.isfinite(np.asarray(cube[index], dtype=float)).any():
+            valid_indices.append(index)
+
+    initial_index = valid_indices[0] if valid_indices else 0
+    return {
+        "available": True,
+        "count": int(cube.shape[0]),
+        "time": np.round(times, 6).tolist(),
+        "grids": serialized_grids,
+        "initial_index": int(initial_index),
+        "message": "Slider frame attivo: seleziona un cadence del TPF oppure clicca un punto della light curve.",
+    }
+
+
 def load_local_tpf(gaia_source_id: str, sector: int, data_dir: str) -> dict | None:
     LOGGER.info("Attempting local TPF load for gaia_source_id=%s sector=%s from %s", gaia_source_id, sector, data_dir)
     try:
@@ -61,6 +93,7 @@ def load_local_tpf(gaia_source_id: str, sector: int, data_dir: str) -> dict | No
             flux_cube = np.asarray(pixels_data["FLUX"], dtype=float)
             flux_grid = _build_flux_grid_from_cube(flux_cube)
             time_values = np.asarray(pixels_data["TIME"], dtype=float) if "TIME" in pixels_data.names else np.arange(flux_cube.shape[0], dtype=float)
+            frames_payload = _build_serialized_frames(flux_cube, time_values)
             primary_header = hdul[0].header
             pixels_header = pixels_hdu.header
             try:
@@ -87,6 +120,7 @@ def load_local_tpf(gaia_source_id: str, sector: int, data_dir: str) -> dict | No
                 "shape": shape,
                 "cadence_count": cadence_count,
                 "flux_grid": flux_grid,
+                "frames": frames_payload,
                 "source": {
                     "type": "local_test_data",
                     "path": str(file_path),

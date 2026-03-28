@@ -22,6 +22,7 @@ def compute_lightcurve_stub(gaia_source_id: str, target_info: dict | None = None
         "corrected_flux": [],
         "target_flux": [],
         "background_flux_per_pixel": [],
+        "frame_indices": [],
         "summary": {
             "target_gmag": rounded_or_none((target_info or {}).get("gmag"), 4),
             "x_axis": "time",
@@ -250,6 +251,7 @@ def compute_real_lightcurve(
     target_flux_out = np.round(target_flux[valid], 6).tolist()
     background_out = np.round(background_flux_per_pixel[valid], 6).tolist()
     corrected_out = np.round(corrected_flux[valid], 6).tolist()
+    frame_indices = np.flatnonzero(valid).astype(int).tolist()
 
     LOGGER.info(
         "Computed real light curve with target_pixels=%s background_pixels=%s points=%s mode=%s",
@@ -269,6 +271,7 @@ def compute_real_lightcurve(
         "target_flux": target_flux_out,
         "background_flux_per_pixel": background_out,
         "corrected_flux": corrected_out,
+        "frame_indices": frame_indices,
         "summary": {
             "target_pixels": target_pixels,
             "background_pixels": background_pixels,

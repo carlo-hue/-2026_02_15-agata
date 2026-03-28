@@ -66,6 +66,15 @@
                     <h2>Light Curve</h2>
                     <div id="lightcurveInfo" class="panel-note">Light curve non ancora richiesta.</div>
                     <div id="lightcurvePlot" class="plot-box"></div>
+                    <div class="frame-toolbar">
+                        <label for="frameSlider" class="frame-toolbar-label">Frame</label>
+                        <input id="frameSlider" type="range" min="0" max="0" step="1" value="0" disabled>
+                        <div class="frame-toolbar-meta">
+                            <span id="frameIndexLabel" class="detail-text">Frame: - / -</span>
+                            <span id="frameTimeLabel" class="detail-text">Time: -</span>
+                        </div>
+                    </div>
+                    <div id="frameInfo" class="detail-block detail-text">Navigazione frame disponibile solo con TPF reale.</div>
                 </section>
             </section>
             <div id="targetInfo" class="hidden"></div>

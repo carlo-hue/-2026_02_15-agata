@@ -51,6 +51,17 @@ def _empty_overlay_payload(message: str) -> dict:
     }
 
 
+def _empty_frames_payload(message: str) -> dict:
+    return {
+        "available": False,
+        "count": 0,
+        "time": [],
+        "grids": [],
+        "initial_index": 0,
+        "message": message,
+    }
+
+
 def _relative_flux_from_gmag(gmag: float | None, reference_gmag: float | None) -> float:
     if gmag is None:
         return 0.2
@@ -269,6 +280,7 @@ def _build_tpf_preview(target_info: dict, sector: int, nearby_sources: list[dict
             "ticid": None,
         },
         "masks": _empty_masks_payload("Maschere automatiche disponibili solo con TPF reale."),
+        "frames": _empty_frames_payload("Navigazione frame disponibile solo con TPF reale."),
         "overlay": {
             "status": "preview",
             "message": "Overlay Gaia e target disponibile solo con TPF reale e WCS utilizzabile.",

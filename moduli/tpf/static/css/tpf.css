@@ -310,6 +310,31 @@ h2 {
     margin: 0.8rem 0 0.6rem;
 }
 
+.frame-toolbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: center;
+    margin: 0 0 0.8rem;
+}
+
+.frame-toolbar-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.frame-toolbar input[type="range"] {
+    width: 100%;
+}
+
+.frame-toolbar-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.15rem;
+    white-space: nowrap;
+}
+
 .edit-mode-button {
     background: #dbe6f2;
     color: #35506b;
@@ -415,6 +440,14 @@ h2 {
 
     .grid-layout {
         grid-template-columns: 1fr;
+    }
+
+    .frame-toolbar {
+        grid-template-columns: 1fr;
+    }
+
+    .frame-toolbar-meta {
+        align-items: flex-start;
     }
 
     .plot-box {
