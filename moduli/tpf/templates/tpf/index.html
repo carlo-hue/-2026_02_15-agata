@@ -5,125 +5,163 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ module_title }}</title>
     <link rel="stylesheet" href="{{ url_for('tpf.static', filename='css/tpf.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 </head>
 <body>
-    <main
-        id="tpfApp"
-        class="page-shell"
-        data-run-url="{{ url_for('tpf.run_api') }}"
-        data-save-url="{{ url_for('tpf.save_api') }}"
-        data-mode="{{ page_context.mode }}"
-        data-gaia-source-id="{{ page_context.gaia_source_id }}"
-        data-sector="{{ page_context.sector }}"
-        data-source-context="{{ page_context.source_context }}"
-    >
-        <section class="hero-panel">
+    <aside class="module-sidebar">
+        <div class="module-sidebar-title">Moduli Principali</div>
+        <nav class="module-nav">
+            <a href="{{ module_links.admin }}" class="module-nav-link"><i class="bi bi-wrench"></i>Admin</a>
+            <a href="{{ module_links.variable_stars }}" class="module-nav-link"><i class="bi bi-graph-up"></i>Editor Stelle</a>
+            <a href="{{ module_links.exoplanets }}" class="module-nav-link"><i class="bi bi-globe"></i>Esopianeti</a>
+            <a href="{{ module_links.field_star_map }}" class="module-nav-link"><i class="bi bi-bullseye"></i>Field Star Map</a>
+            <a href="{{ module_links.galassie_nane }}" class="module-nav-link"><i class="bi bi-stars"></i>Galassie Nane</a>
+            <a href="{{ module_links.tess_tce }}" class="module-nav-link"><i class="bi bi-search-heart"></i>TESS TCE</a>
+            <a href="{{ module_links.tpf }}" class="module-nav-link active"><i class="bi bi-grid-3x3-gap"></i>TPF</a>
+        </nav>
+    </aside>
+
+    <div class="app-shell">
+        <header class="module-header">
             <h1>{{ module_title }}</h1>
-            <p class="lead">{{ scaffold_message }}</p>
-            <p class="meta">Editor TPF con pipeline Gaia DR3, lookup deterministico del file reale locale tramite <code>gaia_source_id + sector</code>, maschere automatiche iniziali, editing manuale pixel e fallback a preview sintetica.</p>
-        </section>
+            <nav>
+                <a href="{{ module_links.variable_stars }}">Stelle Variabili</a>
+                <a href="{{ module_links.exoplanets }}">Esopianeti</a>
+                <a href="{{ module_links.field_star_map }}">Field Star Map</a>
+                <a href="{{ module_links.galassie_nane }}">Galassie Nane</a>
+                <a href="{{ module_links.tess_tce }}">TESS TCE</a>
+                <a href="{{ module_links.tpf }}" class="active">TPF</a>
+            </nav>
+        </header>
 
-        <section class="panel panel-integration">
-            <h2>Contesto di integrazione</h2>
-            <div class="info-grid integration-grid">
-                <div>
-                    <span class="k">Modalita'</span>
-                    <span class="v">{{ page_context.mode }}</span>
-                </div>
-                <div>
-                    <span class="k">gaia_source_id iniziale</span>
-                    <span class="v mono">{{ page_context.gaia_source_id or '-' }}</span>
-                </div>
-                <div>
-                    <span class="k">sector iniziale</span>
-                    <span class="v mono">{{ page_context.sector or '-' }}</span>
-                </div>
-                <div>
-                    <span class="k">source_context</span>
-                    <span class="v">{{ page_context.source_context or '-' }}</span>
-                </div>
-            </div>
-            <p class="form-hint">
-                {% if page_context.mode == 'integrated' %}
-                Modalita' <strong>integrated</strong>: l'editor TPF e' stato aperto da un altro componente AGATA con contesto chiamante esplicito.
-                {% else %}
-                Modalita' <strong>standalone</strong>: l'editor TPF e' stato aperto direttamente, senza contesto chiamante.
-                {% endif %}
-                Se il TPF reale e' disponibile, puoi modificare manualmente foreground/background e ricalcolare la light curve.
-            </p>
-        </section>
+        <main
+            id="tpfApp"
+            class="page-shell"
+            data-run-url="{{ url_for('tpf.run_api') }}"
+            data-save-url="{{ url_for('tpf.save_api') }}"
+            data-mode="{{ page_context.mode }}"
+            data-gaia-source-id="{{ page_context.gaia_source_id }}"
+            data-sector="{{ page_context.sector }}"
+            data-source-context="{{ page_context.source_context }}"
+        >
+            <section class="grid-layout">
+                <section class="panel">
+                    <h2>TPF</h2>
+                    <div id="tpfHeaderMeta" class="tpf-header-meta detail-text">gaia_source_id=- | sector=- | ra=- | dec=- | gmag=-</div>
+                    <div id="tpfPlot" class="plot-box"></div>
+                    <div class="edit-toolbar">
+                        <button type="button" id="gaiaOverlayToggleButton" class="overlay-toggle-button">Gaia overlay ON</button>
+                        <button type="button" id="targetModeButton" class="edit-mode-button is-active" disabled>Target</button>
+                        <button type="button" id="backgroundModeButton" class="edit-mode-button" disabled>Background</button>
+                        <button type="button" id="recalcButton" class="button-secondary" disabled>Ricalcola light curve</button>
+                    </div>
+                    <div id="editInfo" class="edit-info detail-text">Editing pixel disponibile solo con TPF reale.</div>
+                    <div id="maskInfo" class="mask-info detail-text">Selezione automatica foreground/background non ancora disponibile.</div>
+                    <div id="tpfInfo" class="hidden">TPF non ancora richiesto.</div>
+                    <div id="overlayInfo" class="hidden">Overlay target/Gaia non ancora disponibile.</div>
+                </section>
 
-        <section class="panel panel-input">
-            <h2>Input</h2>
-            <form id="tpfForm" class="tpf-form" novalidate>
-                <label for="gaiaSourceIdInput">gaia_source_id (DR3)</label>
-                <div class="input-row input-row-primary">
-                    <input
-                        id="gaiaSourceIdInput"
-                        name="gaia_source_id"
-                        type="text"
-                        value="{{ page_context.gaia_source_id }}"
-                        placeholder="es. 1996211639964641280"
-                        autocomplete="off"
-                    >
-                    <input
-                        id="sectorInput"
-                        name="sector"
-                        type="text"
-                        value="{{ page_context.sector }}"
-                        placeholder="sector es. 57"
-                        autocomplete="off"
-                    >
-                    <button type="submit" id="runButton">Run</button>
-                    <button type="button" id="saveButton" class="button-secondary" disabled>Salva sessione</button>
-                </div>
+                <section class="panel">
+                    <h2>Light Curve</h2>
+                    <div id="lightcurveInfo" class="panel-note">Light curve non ancora richiesta.</div>
+                    <div id="lightcurvePlot" class="plot-box"></div>
+                </section>
+            </section>
+            <div id="targetInfo" class="hidden"></div>
+
+            <section class="panel panel-input">
+                <h2>Input</h2>
+                <form id="tpfForm" class="tpf-form" novalidate>
+                    <label for="gaiaSourceIdInput">gaia_source_id (DR3)</label>
+                    <div class="input-row input-row-primary">
+                        <input
+                            id="gaiaSourceIdInput"
+                            name="gaia_source_id"
+                            type="text"
+                            value="{{ page_context.gaia_source_id }}"
+                            placeholder="es. 1996211639964641280"
+                            autocomplete="off"
+                        >
+                        <input
+                            id="sectorInput"
+                            name="sector"
+                            type="text"
+                            value="{{ page_context.sector }}"
+                            placeholder="sector es. 57"
+                            autocomplete="off"
+                        >
+                        <button type="submit" id="runButton">Run</button>
+                        <button type="button" id="saveButton" class="button-secondary" disabled>Salva sessione</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="panel">
+                <h2>PER DEBUG</h2>
+            </section>
+
+            <section class="panel">
+                <h2>Note Input</h2>
                 <p class="form-hint">Input standard dell'editor TPF: <code>gaia_source_id</code> e <code>sector</code> sono richiesti; <code>source_context</code> resta opzionale.</p>
-            </form>
-        </section>
-
-        <section class="panel panel-status">
-            <h2>Stato</h2>
-            <div id="statusBox" class="status-box status-neutral">In attesa di input.</div>
-            <div id="errorBox" class="status-box status-error hidden"></div>
-        </section>
-
-        <section class="panel panel-save">
-            <h2>Salvataggio</h2>
-            <div id="saveStatusBox" class="status-box status-neutral">Nessun salvataggio eseguito.</div>
-        </section>
-
-        <section class="grid-layout">
-            <section class="panel">
-                <h2>Target</h2>
-                <div id="targetInfo" class="info-grid empty-state">Nessun target caricato.</div>
             </section>
 
             <section class="panel">
-                <h2>TPF</h2>
-                <div id="tpfInfo" class="panel-note">TPF non ancora richiesto.</div>
-                <div id="overlayInfo" class="overlay-info">Overlay target/Gaia non ancora disponibile.</div>
-                <div class="edit-toolbar">
-                    <button type="button" id="gaiaOverlayToggleButton" class="overlay-toggle-button">Gaia overlay ON</button>
-                    <button type="button" id="targetModeButton" class="edit-mode-button is-active" disabled>Target</button>
-                    <button type="button" id="backgroundModeButton" class="edit-mode-button" disabled>Background</button>
-                    <button type="button" id="recalcButton" class="button-secondary" disabled>Ricalcola light curve</button>
+                <h2>Dettagli TPF</h2>
+                <div id="tpfDetailsInfo" class="detail-block detail-text">TPF non ancora richiesto.</div>
+                <div id="overlayDetailsInfo" class="detail-block detail-text">Overlay target/Gaia non ancora disponibile.</div>
+            </section>
+
+            <section class="hero-panel">
+                <h2>{{ module_title }}</h2>
+                <p class="lead">{{ scaffold_message }}</p>
+                <p class="meta">Editor TPF con pipeline Gaia DR3, lookup deterministico del file reale locale tramite <code>gaia_source_id + sector</code>, maschere automatiche iniziali, editing manuale pixel e fallback a preview sintetica.</p>
+            </section>
+
+            <section class="panel panel-integration">
+                <h2>Contesto di integrazione</h2>
+                <div class="info-grid integration-grid">
+                    <div>
+                        <span class="k">Modalita'</span>
+                        <span class="v">{{ page_context.mode }}</span>
+                    </div>
+                    <div>
+                        <span class="k">gaia_source_id iniziale</span>
+                        <span class="v mono">{{ page_context.gaia_source_id or '-' }}</span>
+                    </div>
+                    <div>
+                        <span class="k">sector iniziale</span>
+                        <span class="v mono">{{ page_context.sector or '-' }}</span>
+                    </div>
+                    <div>
+                        <span class="k">source_context</span>
+                        <span class="v">{{ page_context.source_context or '-' }}</span>
+                    </div>
                 </div>
-                <div id="editInfo" class="edit-info">Editing pixel disponibile solo con TPF reale.</div>
-                <div id="maskInfo" class="mask-info">Selezione automatica foreground/background non ancora disponibile.</div>
-                <div id="tpfPlot" class="plot-box"></div>
+                <p class="form-hint">
+                    {% if page_context.mode == 'integrated' %}
+                    Modalita' <strong>integrated</strong>: l'editor TPF e' stato aperto da un altro componente AGATA con contesto chiamante esplicito.
+                    {% else %}
+                    Modalita' <strong>standalone</strong>: l'editor TPF e' stato aperto direttamente, senza contesto chiamante.
+                    {% endif %}
+                    Se il TPF reale e' disponibile, puoi modificare manualmente foreground/background e ricalcolare la light curve.
+                </p>
+            </section>
+
+            <section class="panel panel-status">
+                <h2>Stato</h2>
+                <div id="statusBox" class="status-box status-neutral">In attesa di input.</div>
+                <div id="errorBox" class="status-box status-error hidden"></div>
+            </section>
+
+            <section class="panel panel-save">
+                <h2>Salvataggio</h2>
+                <div id="saveStatusBox" class="status-box status-neutral">Nessun salvataggio eseguito.</div>
             </section>
 
             <section class="panel">
-                <h2>Light Curve</h2>
-                <div id="lightcurveInfo" class="panel-note">Light curve non ancora richiesta.</div>
-                <div id="lightcurvePlot" class="plot-box"></div>
-            </section>
-        </section>
-
-        <section class="panel">
-            <h2>AGATA Return Payload</h2>
-            <pre id="returnPayloadBox" class="output-box">{
+                <h2>AGATA Return Payload</h2>
+                <pre id="returnPayloadBox" class="output-box">{
   "component": "tpf",
   "mode": "{{ page_context.mode }}",
   "source_context": {{ 'null' if not page_context.source_context else '"' + page_context.source_context + '"' }},
@@ -148,13 +186,14 @@
     }
   }
 }</pre>
-        </section>
+            </section>
 
-        <section class="panel">
-            <h2>Output JSON Tecnico</h2>
-            <pre id="output" class="output-box">{}</pre>
-        </section>
-    </main>
+            <section class="panel">
+                <h2>Output JSON Tecnico</h2>
+                <pre id="output" class="output-box">{}</pre>
+            </section>
+        </main>
+    </div>
 
     <script src="{{ url_for('tpf.static', filename='js/tpf/main.js') }}"></script>
 </body>

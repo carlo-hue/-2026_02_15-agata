@@ -16,7 +16,10 @@
     const returnPayloadBox = document.getElementById("returnPayloadBox");
     const targetInfo = document.getElementById("targetInfo");
     const tpfInfo = document.getElementById("tpfInfo");
+    const tpfHeaderMeta = document.getElementById("tpfHeaderMeta");
     const overlayInfo = document.getElementById("overlayInfo");
+    const tpfDetailsInfo = document.getElementById("tpfDetailsInfo");
+    const overlayDetailsInfo = document.getElementById("overlayDetailsInfo");
     const editInfo = document.getElementById("editInfo");
     const maskInfo = document.getElementById("maskInfo");
     const lightcurveInfo = document.getElementById("lightcurveInfo");
@@ -26,11 +29,13 @@
     let lastRunResult = null;
     let targetMask = [];
     let backgroundMask = [];
+    let committedTargetMask = [];
+    let committedBackgroundMask = [];
     let editMode = "target";
     let editingEnabled = false;
     let gaiaOverlayEnabled = true;
 
-    if (!appRoot || !form || !gaiaSourceIdInput || !sectorInput || !runButton || !saveButton || !gaiaOverlayToggleButton || !targetModeButton || !backgroundModeButton || !recalcButton || !statusBox || !saveStatusBox || !errorBox || !output || !returnPayloadBox || !targetInfo || !tpfInfo || !overlayInfo || !editInfo || !maskInfo || !lightcurveInfo || !tpfPlot || !lightcurvePlot) {
+    if (!appRoot || !form || !gaiaSourceIdInput || !sectorInput || !runButton || !saveButton || !gaiaOverlayToggleButton || !targetModeButton || !backgroundModeButton || !recalcButton || !statusBox || !saveStatusBox || !errorBox || !output || !returnPayloadBox || !targetInfo || !tpfInfo || !tpfHeaderMeta || !overlayInfo || !tpfDetailsInfo || !overlayDetailsInfo || !editInfo || !maskInfo || !lightcurveInfo || !tpfPlot || !lightcurvePlot) {
         return;
     }
 
@@ -90,6 +95,30 @@
         return maskMatrix.map((row) => Array.isArray(row) ? row.map((value) => !!value) : []);
     }
 
+    function masksEqual(leftMask, rightMask) {
+        if (!Array.isArray(leftMask) || !Array.isArray(rightMask) || leftMask.length !== rightMask.length) {
+            return false;
+        }
+        for (let row = 0; row < leftMask.length; row += 1) {
+            if (!Array.isArray(leftMask[row]) || !Array.isArray(rightMask[row]) || leftMask[row].length !== rightMask[row].length) {
+                return false;
+            }
+            for (let col = 0; col < leftMask[row].length; col += 1) {
+                if (!!leftMask[row][col] !== !!rightMask[row][col]) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    function masksNeedRecalc() {
+        if (!editingEnabled) {
+            return false;
+        }
+        return !masksEqual(targetMask, committedTargetMask) || !masksEqual(backgroundMask, committedBackgroundMask);
+    }
+
     function maskSummary(currentTargetMask, currentBackgroundMask) {
         let targetPixels = 0;
         let backgroundPixels = 0;
@@ -107,7 +136,7 @@
         return {
             available: editingEnabled,
             mode: mode || "manual-ui",
-            message: message || "Maschere modificate in UI.",
+            message: message || 'Premi "Ricalcola light curve" per aggiornare la curva.',
             target: cloneMask(targetMask),
             background: cloneMask(backgroundMask),
             summary: {
@@ -127,9 +156,13 @@
 
     function resetSections() {
         renderTarget(null);
+        tpfHeaderMeta.textContent = "gaia_source_id=- | sector=- | ra=- | dec=- | gmag=-";
         tpfInfo.textContent = "TPF non ancora richiesto.";
         overlayInfo.textContent = "Overlay target/Gaia non ancora disponibile.";
+        tpfDetailsInfo.textContent = "TPF non ancora richiesto.";
+        overlayDetailsInfo.textContent = "Overlay target/Gaia non ancora disponibile.";
         maskInfo.textContent = "Selezione automatica foreground/background non ancora disponibile.";
+        maskInfo.classList.remove("warning");
         lightcurveInfo.textContent = "Light curve non ancora richiesta.";
         editInfo.textContent = "Editing pixel disponibile solo con TPF reale.";
     }
@@ -409,6 +442,17 @@
         return parts.join(" | ") || "TPF disponibile.";
     }
 
+    function formatTpfHeaderMeta(result) {
+        const input = result && result.input ? result.input : {};
+        const target = result && result.target ? result.target : {};
+        const gaiaSourceId = target.gaia_source_id || input.gaia_source_id || "-";
+        const sector = input.sector ?? "-";
+        const raDeg = target.ra_deg ?? "-";
+        const decDeg = target.dec_deg ?? "-";
+        const gmag = target.gmag ?? "-";
+        return `gaia_source_id=${gaiaSourceId} | sector=${sector} | ra=${raDeg} | dec=${decDeg} | gmag=${gmag}`;
+    }
+
     function formatMaskInfo(tpf) {
         if (!tpf || !tpf.masks) {
             return "Selezione foreground/background non disponibile.";
@@ -481,10 +525,14 @@
         if (tpf && tpf.mode === "real" && tpf.masks && tpf.masks.available) {
             targetMask = cloneMask(tpf.masks.target);
             backgroundMask = cloneMask(tpf.masks.background);
+            committedTargetMask = cloneMask(tpf.masks.target);
+            committedBackgroundMask = cloneMask(tpf.masks.background);
             editingEnabled = true;
         } else {
             targetMask = [];
             backgroundMask = [];
+            committedTargetMask = [];
+            committedBackgroundMask = [];
             editingEnabled = false;
         }
         updateEditingControls();
@@ -509,9 +557,13 @@
             return;
         }
         updateGaiaOverlayToggleButton();
+        tpfHeaderMeta.textContent = formatTpfHeaderMeta(lastRunResult);
         tpfInfo.textContent = formatTpfInfo(tpf);
         overlayInfo.textContent = formatOverlayInfo(tpf);
+        tpfDetailsInfo.textContent = tpfInfo.textContent;
+        overlayDetailsInfo.textContent = overlayInfo.textContent;
         maskInfo.textContent = formatMaskInfo(tpf);
+        maskInfo.classList.toggle("warning", masksNeedRecalc());
         renderTPF(tpf.flux_grid, tpf.masks || null);
     }
 
@@ -520,9 +572,13 @@
         if (data.tpf && data.tpf.available && Array.isArray(data.tpf.flux_grid)) {
             renderCurrentTpfState();
         } else {
+            tpfHeaderMeta.textContent = formatTpfHeaderMeta(data);
             tpfInfo.textContent = formatTpfInfo(data.tpf);
             overlayInfo.textContent = formatOverlayInfo(data.tpf);
+            tpfDetailsInfo.textContent = tpfInfo.textContent;
+            overlayDetailsInfo.textContent = overlayInfo.textContent;
             maskInfo.textContent = formatMaskInfo(data.tpf);
+            maskInfo.classList.toggle("warning", masksNeedRecalc());
             Plotly.purge(tpfPlot);
             tpfPlot.innerHTML = "";
         }
@@ -696,6 +752,8 @@
         lastRunResult = null;
         targetMask = [];
         backgroundMask = [];
+        committedTargetMask = [];
+        committedBackgroundMask = [];
         editingEnabled = false;
         saveButton.disabled = true;
         updateEditingControls();

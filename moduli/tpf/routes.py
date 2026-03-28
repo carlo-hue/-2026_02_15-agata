@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, current_app, jsonify, render_template, request, url_for
 
 from .config import settings
 from .services import run_tpf_pipeline, save_tpf_session_stub
@@ -28,6 +28,15 @@ def _build_page_context(args) -> dict:
     }
 
 
+def _optional_url(endpoint: str, fallback: str = "#") -> str:
+    if endpoint not in current_app.view_functions:
+        return fallback
+    try:
+        return url_for(endpoint)
+    except Exception:
+        return fallback
+
+
 def create_blueprint() -> Blueprint:
     bp = Blueprint(
         "tpf",
@@ -45,6 +54,15 @@ def create_blueprint() -> Blueprint:
             module_title=settings.module_title,
             scaffold_message=settings.placeholder_message,
             page_context=page_context,
+            module_links={
+                "admin": _optional_url("admin.list_projects"),
+                "variable_stars": _optional_url("variable_stars.index"),
+                "exoplanets": _optional_url("exoplanets.index"),
+                "field_star_map": _optional_url("field_star_map.index"),
+                "galassie_nane": _optional_url("galassie_nane.index"),
+                "tess_tce": _optional_url("tess_tce.index"),
+                "tpf": url_for("tpf.index"),
+            },
         )
 
     @bp.get("/health")
