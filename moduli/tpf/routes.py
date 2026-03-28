@@ -5,7 +5,7 @@ import logging
 from flask import Blueprint, current_app, jsonify, render_template, request, url_for
 
 from .config import settings
-from .services import run_tpf_pipeline, save_tpf_session_stub
+from .services import load_tpf_frame_window, run_tpf_pipeline, save_tpf_session_stub
 from .services.utils import validate_sector
 
 LOGGER = logging.getLogger(__name__)
@@ -103,6 +103,56 @@ def create_blueprint() -> Blueprint:
             return _json_error(str(err), 400)
         except Exception as err:
             LOGGER.exception("TPF pipeline failed for gaia_source_id=%s sector=%s", gaia_source_id, sector)
+            return _json_error(str(err), 502)
+        return jsonify(result)
+
+    @bp.post("/api/frames")
+    def frames_api():
+        payload = request.get_json(silent=True) or {}
+        if not isinstance(payload, dict):
+            return _json_error("payload JSON non valido", 400)
+
+        gaia_source_id = str(payload.get("gaia_source_id", "")).strip()
+        sector_raw = payload.get("sector", "")
+        frame_start_raw = payload.get("frame_start")
+        frame_end_raw = payload.get("frame_end")
+        if not gaia_source_id:
+            return _json_error("gaia_source_id mancante", 400)
+
+        try:
+            sector = validate_sector(sector_raw)
+            frame_start = int(frame_start_raw)
+            frame_end = int(frame_end_raw)
+        except (TypeError, ValueError):
+            return _json_error("Intervallo frame non valido", 400)
+
+        LOGGER.info(
+            "TPF frame window requested for gaia_source_id=%s sector=%s frame_start=%s frame_end=%s",
+            gaia_source_id,
+            sector,
+            frame_start,
+            frame_end,
+        )
+        try:
+            result = load_tpf_frame_window(gaia_source_id, sector, frame_start, frame_end)
+        except ValueError as err:
+            LOGGER.warning(
+                "TPF frame window validation error for %s sector=%s frame_start=%s frame_end=%s: %s",
+                gaia_source_id,
+                sector,
+                frame_start,
+                frame_end,
+                err,
+            )
+            return _json_error(str(err), 400)
+        except Exception as err:
+            LOGGER.exception(
+                "TPF frame window failed for gaia_source_id=%s sector=%s frame_start=%s frame_end=%s",
+                gaia_source_id,
+                sector,
+                frame_start,
+                frame_end,
+            )
             return _json_error(str(err), 502)
         return jsonify(result)
 

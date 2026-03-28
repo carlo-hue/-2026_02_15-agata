@@ -93,22 +93,24 @@ Il backend valida le maschere ricevute e ricalcola la light curve usando quelle 
 
 ## Navigazione temporale del TPF
 
-Quando il TPF reale e' disponibile, il backend espone anche:
+Quando il TPF reale e' disponibile:
 
-- i frame serializzati del cubo `FLUX`
-- l'array `time`
-- l'indice iniziale del frame mostrato
-- la mappa `frame_indices` della light curve reale
+- il `Run` non trasferisce piu' subito tutto il cubo `FLUX`
+- il backend espone solo i metadati dei frame e la mappa `frame_indices` della light curve reale
+- i frame reali vengono caricati a richiesta tramite endpoint dedicato
 
 In UI:
 
-- compare uno slider `Frame`
+- compare il pulsante `Carica frame visibili`
+- l'utente puo' fare zoom sulla light curve
+- il pulsante carica solo i cadence visibili nella finestra attuale
+- dopo il caricamento, compare lo slider `Frame`
 - viene mostrato `Frame: i / N`
 - viene mostrato `Time: ...`
-- il TPF visualizza il frame corrente, non solo la mediana riassuntiva
-- cliccando un punto della light curve si seleziona il frame corrispondente
+- il TPF visualizza il frame corrente invece della sola mediana riassuntiva
+- cliccando un punto della light curve si seleziona il frame corrispondente se quel frame appartiene alla finestra caricata
 
-Le maschere foreground/background, il target e l'overlay Gaia restano visibili su ogni frame.
+Le maschere foreground/background, il target e l'overlay Gaia restano visibili su ogni frame caricato.
 
 ## Overlay target e sorgenti Gaia
 
@@ -165,9 +167,10 @@ La pagina mostra:
 - TPF reale locale quando disponibile
 - marker del target sul TPF
 - marker delle sorgenti Gaia nel campo TPF
-- slider frame attivo sul TPF reale
+- pulsante `Carica frame visibili` sotto la light curve
+- slider frame attivo solo dopo il caricamento esplicito dei frame visibili
 - etichetta con indice frame e tempo corrente
-- click sulla light curve che sincronizza il frame mostrato nel TPF
+- click sulla light curve che sincronizza il frame mostrato nel TPF quando il frame e' dentro la finestra caricata
 - pulsante `Gaia overlay ON/OFF` utile quando le stelle Gaia rendono difficile il click sui pixel
 - overlay foreground in rosso sul TPF
 - overlay background in bianco sul TPF
@@ -189,16 +192,18 @@ Flusso suggerito:
 1. Esegui `Run`
 2. Verifica che il TPF sia `mode = real`
 3. Verifica che compaiano foreground/background automatici
-4. Muovi lo slider `Frame` e verifica che il TPF cambi cadence
-5. Clicca un punto della light curve e verifica che il TPF salti al frame corretto
-6. Scegli `Target` oppure `Background`
-7. Clicca alcuni pixel sulla heatmap
-8. Premi `Ricalcola light curve`
+4. Fai zoom su una porzione della light curve, oppure lascia la vista completa
+5. Premi `Carica frame visibili` e conferma l'avviso
+6. Muovi lo slider `Frame` e verifica che il TPF cambi cadence
+7. Clicca un punto della light curve nella finestra caricata e verifica che il TPF salti al frame corretto
+8. Scegli `Target` oppure `Background`
+9. Clicca alcuni pixel sulla heatmap
+10. Premi `Ricalcola light curve`
 7. Verifica:
    - aggiornamento del riepilogo pixel
    - aggiornamento del grafico light curve
    - messaggio `Light curve aggiornata`
-   - slider frame ancora attivo e coerente
+   - slider frame coerente con la finestra caricata
 
 ## Come testare il caso preview sintetica
 
@@ -210,6 +215,7 @@ Usa una combinazione valida lato Gaia ma senza file locale corrispondente, ad es
 Esito atteso:
 
 - `tpf.mode = "preview"`
+- pulsante `Carica frame visibili` disabilitato
 - slider frame disabilitato
 - editing pixel disabilitato
 - `Ricalcola light curve` disabilitato

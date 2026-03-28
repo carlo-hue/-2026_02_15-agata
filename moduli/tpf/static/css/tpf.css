@@ -144,6 +144,10 @@ h2 {
     font-size: 1.05rem;
 }
 
+.panel-title-centered {
+    text-align: center;
+}
+
 .lead {
     margin: 0 0 0.4rem;
     font-weight: 600;
@@ -308,6 +312,14 @@ h2 {
     flex-wrap: wrap;
     gap: 0.6rem;
     margin: 0.8rem 0 0.6rem;
+}
+
+.frame-load-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0.75rem 0 0.6rem;
 }
 
 .frame-toolbar {

@@ -39,6 +39,7 @@
             id="tpfApp"
             class="page-shell"
             data-run-url="{{ url_for('tpf.run_api') }}"
+            data-frames-url="{{ url_for('tpf.frames_api') }}"
             data-save-url="{{ url_for('tpf.save_api') }}"
             data-mode="{{ page_context.mode }}"
             data-gaia-source-id="{{ page_context.gaia_source_id }}"
@@ -66,6 +67,10 @@
                     <h2>Light Curve</h2>
                     <div id="lightcurveInfo" class="panel-note">Light curve non ancora richiesta.</div>
                     <div id="lightcurvePlot" class="plot-box"></div>
+                    <div class="frame-load-toolbar">
+                        <button type="button" id="loadVisibleFramesButton" class="button-secondary" disabled>Carica frame visibili</button>
+                        <span id="loadFramesInfo" class="detail-text">Fai zoom sulla light curve e usa questo pulsante per caricare solo i cadence visibili.</span>
+                    </div>
                     <div class="frame-toolbar">
                         <label for="frameSlider" class="frame-toolbar-label">Frame</label>
                         <input id="frameSlider" type="range" min="0" max="0" step="1" value="0" disabled>
@@ -107,7 +112,7 @@
             </section>
 
             <section class="panel">
-                <h2>PER DEBUG</h2>
+                <h2 class="panel-title-centered">DA QUI IN POI INFO DI DEBUG</h2>
             </section>
 
             <section class="panel">

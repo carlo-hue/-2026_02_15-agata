@@ -9,10 +9,12 @@
     const targetModeButton = document.getElementById("targetModeButton");
     const backgroundModeButton = document.getElementById("backgroundModeButton");
     const recalcButton = document.getElementById("recalcButton");
+    const loadVisibleFramesButton = document.getElementById("loadVisibleFramesButton");
     const frameSlider = document.getElementById("frameSlider");
     const frameIndexLabel = document.getElementById("frameIndexLabel");
     const frameTimeLabel = document.getElementById("frameTimeLabel");
     const frameInfo = document.getElementById("frameInfo");
+    const loadFramesInfo = document.getElementById("loadFramesInfo");
     const statusBox = document.getElementById("statusBox");
     const saveStatusBox = document.getElementById("saveStatusBox");
     const errorBox = document.getElementById("errorBox");
@@ -42,11 +44,13 @@
     let tpfFrames = [];
     let tpfFrameTimes = [];
     let lightcurveFrameIndices = [];
+    let loadedFrameStartIndex = null;
+    let loadedFrameEndIndex = null;
 
     if (
         !appRoot || !form || !gaiaSourceIdInput || !sectorInput || !runButton || !saveButton
-        || !gaiaOverlayToggleButton || !targetModeButton || !backgroundModeButton || !recalcButton
-        || !frameSlider || !frameIndexLabel || !frameTimeLabel || !frameInfo
+        || !gaiaOverlayToggleButton || !targetModeButton || !backgroundModeButton || !recalcButton || !loadVisibleFramesButton
+        || !frameSlider || !frameIndexLabel || !frameTimeLabel || !frameInfo || !loadFramesInfo
         || !statusBox || !saveStatusBox || !errorBox || !output || !returnPayloadBox || !targetInfo
         || !tpfInfo || !tpfHeaderMeta || !overlayInfo || !tpfDetailsInfo || !overlayDetailsInfo
         || !editInfo || !maskInfo || !lightcurveInfo || !tpfPlot || !lightcurvePlot
@@ -56,6 +60,7 @@
 
     const endpointUrls = {
         runUrl: appRoot.dataset.runUrl || "/tpf/api/run",
+        framesUrl: appRoot.dataset.framesUrl || "/tpf/api/frames",
         saveUrl: appRoot.dataset.saveUrl || "/tpf/api/save",
     };
 
@@ -175,6 +180,8 @@
         tpfFrames = [];
         tpfFrameTimes = [];
         lightcurveFrameIndices = [];
+        loadedFrameStartIndex = null;
+        loadedFrameEndIndex = null;
         frameSlider.min = "0";
         frameSlider.max = "0";
         frameSlider.step = "1";
@@ -182,7 +189,9 @@
         frameSlider.disabled = true;
         frameIndexLabel.textContent = "Frame: - / -";
         frameTimeLabel.textContent = "Time: -";
-        frameInfo.textContent = "Navigazione frame disponibile solo con TPF reale.";
+        frameInfo.textContent = "Frame non ancora caricati. Usa il pulsante dedicato dopo aver scelto la porzione di light curve.";
+        loadVisibleFramesButton.disabled = true;
+        loadFramesInfo.textContent = "Fai zoom sulla light curve e usa questo pulsante per caricare solo i cadence visibili.";
     }
 
     function resetSections() {
@@ -220,12 +229,15 @@
     }
 
     function clampFrameIndex(index) {
-        const count = getFrameCount();
-        if (count <= 0) {
-            return 0;
-        }
         const numeric = Number.isFinite(index) ? index : parseInt(index, 10);
         if (!Number.isFinite(numeric)) {
+            return loadedFrameStartIndex !== null ? loadedFrameStartIndex : 0;
+        }
+        if (loadedFrameStartIndex !== null && loadedFrameEndIndex !== null) {
+            return Math.min(loadedFrameEndIndex, Math.max(loadedFrameStartIndex, Math.round(numeric)));
+        }
+        const count = getFrameCount();
+        if (count <= 0) {
             return 0;
         }
         return Math.min(count - 1, Math.max(0, Math.round(numeric)));
@@ -233,9 +245,55 @@
 
     function getCurrentFrameGrid(tpf) {
         if (tpf && tpf.frames && tpf.frames.available && getFrameCount() > 0) {
-            return tpfFrames[clampFrameIndex(currentFrameIndex)];
+            const relativeIndex = loadedFrameStartIndex === null ? clampFrameIndex(currentFrameIndex) : clampFrameIndex(currentFrameIndex) - loadedFrameStartIndex;
+            return tpfFrames[relativeIndex];
         }
         return tpf && Array.isArray(tpf.flux_grid) ? tpf.flux_grid : null;
+    }
+
+    function getLoadedFrameBounds() {
+        if (loadedFrameStartIndex === null || loadedFrameEndIndex === null) {
+            return null;
+        }
+        return { start: loadedFrameStartIndex, end: loadedFrameEndIndex };
+    }
+
+    function getVisibleLightcurveFrameRange() {
+        if (!lastRunResult || !lastRunResult.lightcurve || !Array.isArray(lastRunResult.lightcurve.time) || !lastRunResult.lightcurve.time.length) {
+            return null;
+        }
+
+        const times = lastRunResult.lightcurve.time;
+        const mappedFrameIndices = Array.isArray(lightcurveFrameIndices) && lightcurveFrameIndices.length
+            ? lightcurveFrameIndices
+            : times.map((_, index) => index);
+
+        let minTime = times[0];
+        let maxTime = times[times.length - 1];
+        const currentRange = lightcurvePlot && lightcurvePlot.layout && lightcurvePlot.layout.xaxis ? lightcurvePlot.layout.xaxis.range : null;
+        if (Array.isArray(currentRange) && currentRange.length === 2 && Number.isFinite(Number(currentRange[0])) && Number.isFinite(Number(currentRange[1]))) {
+            minTime = Math.min(Number(currentRange[0]), Number(currentRange[1]));
+            maxTime = Math.max(Number(currentRange[0]), Number(currentRange[1]));
+        }
+
+        const visibleFrameIndices = [];
+        for (let index = 0; index < times.length; index += 1) {
+            const timeValue = Number(times[index]);
+            if (!Number.isFinite(timeValue)) {
+                continue;
+            }
+            if (timeValue >= minTime && timeValue <= maxTime) {
+                visibleFrameIndices.push(mappedFrameIndices[index]);
+            }
+        }
+
+        if (!visibleFrameIndices.length) {
+            return null;
+        }
+        return {
+            frameStart: Math.min(...visibleFrameIndices),
+            frameEnd: Math.max(...visibleFrameIndices),
+        };
     }
 
     function findLightcurvePointIndexForFrame(frameIndex) {
@@ -255,7 +313,17 @@
 
     function updateFrameControls(tpf) {
         const frames = tpf && tpf.frames ? tpf.frames : null;
-        if (!frames || !frames.available || getFrameCount() === 0) {
+        const canLoadFrames = !!(tpf && tpf.mode === "real" && frames && frames.available);
+        loadVisibleFramesButton.disabled = !canLoadFrames;
+        if (!canLoadFrames) {
+            loadFramesInfo.textContent = "Caricamento frame disponibile solo con TPF reale.";
+        } else if (frames.loaded) {
+            loadFramesInfo.textContent = "Frame caricati per la finestra visibile della light curve. Puoi fare nuovo zoom e ricaricare se ti serve un altro intervallo.";
+        } else {
+            loadFramesInfo.textContent = "Fai zoom sulla light curve e usa questo pulsante per caricare solo i cadence visibili.";
+        }
+
+        if (!frames || !frames.available || !frames.loaded || getFrameCount() === 0) {
             frameSlider.disabled = true;
             frameIndexLabel.textContent = "Frame: - / -";
             frameTimeLabel.textContent = "Time: -";
@@ -265,19 +333,21 @@
 
         const safeIndex = clampFrameIndex(currentFrameIndex);
         currentFrameIndex = safeIndex;
-        const count = getFrameCount();
+        const totalCount = Number.isFinite(frames.count) ? frames.count : getFrameCount();
+        const windowBounds = getLoadedFrameBounds();
+        const currentPosition = safeIndex + 1;
         const currentTime = Array.isArray(tpfFrameTimes) && tpfFrameTimes[safeIndex] !== undefined
-            ? tpfFrameTimes[safeIndex]
+            ? tpfFrameTimes[safeIndex - (loadedFrameStartIndex || 0)]
             : "-";
 
         frameSlider.disabled = false;
-        frameSlider.min = "0";
-        frameSlider.max = String(Math.max(0, count - 1));
+        frameSlider.min = String(windowBounds ? windowBounds.start : 0);
+        frameSlider.max = String(windowBounds ? windowBounds.end : Math.max(0, totalCount - 1));
         frameSlider.step = "1";
         frameSlider.value = String(safeIndex);
-        frameIndexLabel.textContent = `Frame: ${safeIndex + 1} / ${count}`;
+        frameIndexLabel.textContent = `Frame: ${currentPosition} / ${totalCount}`;
         frameTimeLabel.textContent = `Time: ${currentTime}`;
-        frameInfo.textContent = `Frame reale corrente: ${safeIndex + 1}/${count} | Time=${currentTime} | ${frames.message || "Clicca un punto della light curve per vedere il frame corrispondente."}`;
+        frameInfo.textContent = `Frame reale corrente: ${currentPosition}/${totalCount} | Time=${currentTime} | finestra caricata=${windowBounds ? `${windowBounds.start + 1}-${windowBounds.end + 1}` : "-"} | ${frames.message || "Clicca un punto della light curve per vedere il frame corrispondente."}`;
     }
     function handleTpfPlotClick(eventData) {
         if (!editingEnabled || !lastRunResult || !lastRunResult.tpf || lastRunResult.tpf.mode !== "real") {
@@ -425,7 +495,6 @@
     }
 
     function renderTPF(grid, masks) {
-        tpfPlot.__maskClickBound = false;
         const traces = [{
             z: grid,
             type: "heatmap",
@@ -493,8 +562,12 @@
             yaxis: { title: "Pixel Y", autorange: "reversed", scaleanchor: "x", scaleratio: 1 },
             legend: { orientation: "h" },
             shapes,
+            uirevision: "tpf-frame-view",
         };
-        Plotly.newPlot(tpfPlot, traces, layout, { responsive: true, displayModeBar: false }).then(function () {
+        const renderPromise = tpfPlot.data
+            ? Plotly.react(tpfPlot, traces, layout, { responsive: true, displayModeBar: false })
+            : Plotly.newPlot(tpfPlot, traces, layout, { responsive: true, displayModeBar: false });
+        renderPromise.then(function () {
             if (!tpfPlot.__maskClickBound && typeof tpfPlot.on === "function") {
                 tpfPlot.on("plotly_click", handleTpfPlotClick);
                 tpfPlot.__maskClickBound = true;
@@ -511,11 +584,19 @@
         const targetFrameIndex = Array.isArray(lightcurveFrameIndices) && lightcurveFrameIndices.length
             ? lightcurveFrameIndices[clickedIndex]
             : clickedIndex;
+        const bounds = getLoadedFrameBounds();
+        if (!bounds) {
+            setStatus("Fai zoom sulla light curve e usa \"Carica frame visibili\" per attivare lo scorrimento del TPF.", "status-neutral");
+            return;
+        }
+        if (targetFrameIndex < bounds.start || targetFrameIndex > bounds.end) {
+            setStatus("Il punto selezionato e' fuori dalla finestra frame caricata. Fai nuovo zoom e ricarica i frame visibili.", "status-neutral");
+            return;
+        }
         setCurrentFrameIndex(targetFrameIndex);
     }
 
     function renderLightcurve(lightcurve) {
-        lightcurvePlot.__lightcurveClickBound = false;
         const time = Array.isArray(lightcurve.time) ? lightcurve.time : [];
         const corrected = Array.isArray(lightcurve.corrected_flux) ? lightcurve.corrected_flux : (Array.isArray(lightcurve.flux) ? lightcurve.flux : []);
         const traces = [{
@@ -550,8 +631,12 @@
             margin: { t: 40, r: 20, b: 40, l: 50 },
             xaxis: { title: "Time" },
             yaxis: { title: "Corrected Flux" },
+            uirevision: "lightcurve-view",
         };
-        Plotly.newPlot(lightcurvePlot, traces, layout, { responsive: true, displayModeBar: false }).then(function () {
+        const renderPromise = lightcurvePlot.data
+            ? Plotly.react(lightcurvePlot, traces, layout, { responsive: true, displayModeBar: false })
+            : Plotly.newPlot(lightcurvePlot, traces, layout, { responsive: true, displayModeBar: false });
+        renderPromise.then(function () {
             if (!lightcurvePlot.__lightcurveClickBound && typeof lightcurvePlot.on === "function") {
                 lightcurvePlot.on("plotly_click", handleLightcurveClick);
                 lightcurvePlot.__lightcurveClickBound = true;
@@ -594,7 +679,10 @@
             return tpf.masks.message || "Selezione foreground/background non disponibile.";
         }
         const summary = tpf.masks.summary || {};
-        return `${tpf.masks.message || "Maschere disponibili."} | target_pixels=${summary.target_pixels ?? 0} | background_pixels=${summary.background_pixels ?? 0}`;
+        const message = masksNeedRecalc()
+            ? 'Premi "Ricalcola light curve" per aggiornare la curva.'
+            : "Light curve aggiornata.";
+        return `${message} | target_pixels=${summary.target_pixels ?? 0} | background_pixels=${summary.background_pixels ?? 0}`;
     }
 
     function formatOverlayInfo(tpf) {
@@ -674,14 +762,18 @@
     function syncFrameStateFromResult(result) {
         const tpf = result && result.tpf ? result.tpf : null;
         const frames = tpf && tpf.frames ? tpf.frames : null;
-        if (frames && frames.available && Array.isArray(frames.grids) && frames.grids.length) {
+        if (frames && frames.available && frames.loaded && Array.isArray(frames.grids) && frames.grids.length) {
             tpfFrames = frames.grids;
             tpfFrameTimes = Array.isArray(frames.time) ? frames.time : [];
-            currentFrameIndex = clampFrameIndex(frames.initial_index || 0);
+            loadedFrameStartIndex = Number.isFinite(frames.start_index) ? frames.start_index : 0;
+            loadedFrameEndIndex = Number.isFinite(frames.end_index) ? frames.end_index : (loadedFrameStartIndex + frames.grids.length - 1);
+            currentFrameIndex = Number.isFinite(frames.initial_index) ? frames.initial_index : loadedFrameStartIndex;
         } else {
             tpfFrames = [];
             tpfFrameTimes = [];
             currentFrameIndex = 0;
+            loadedFrameStartIndex = null;
+            loadedFrameEndIndex = null;
         }
 
         if (result && result.lightcurve && Array.isArray(result.lightcurve.frame_indices)) {
@@ -793,8 +885,9 @@
                     } : null,
                     frames: result && result.tpf && result.tpf.frames ? {
                         available: !!result.tpf.frames.available,
+                        loaded: !!result.tpf.frames.loaded,
                         count: result.tpf.frames.count ?? 0,
-                        current_index: getFrameCount() > 0 ? clampFrameIndex(currentFrameIndex) : null,
+                        current_index: getLoadedFrameBounds() ? clampFrameIndex(currentFrameIndex) : null,
                     } : null,
                     overlay: result && result.tpf && result.tpf.overlay ? {
                         target_position: result.tpf.overlay.target_position || null,
@@ -841,6 +934,24 @@
         return { response, data };
     }
 
+    async function loadFramesWindow(gaiaSourceId, sector, frameStart, frameEnd) {
+        const response = await fetch(endpointUrls.framesUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                gaia_source_id: gaiaSourceId,
+                sector: sector,
+                frame_start: frameStart,
+                frame_end: frameEnd,
+            }),
+        });
+        const data = await response.json().catch(() => ({ status: "error", message: "Risposta JSON non valida" }));
+        output.textContent = JSON.stringify(data, null, 2);
+        return { response, data };
+    }
+
     async function handlePipelineSuccess(data, statusMessage) {
         lastRunResult = data;
         saveButton.disabled = false;
@@ -855,6 +966,25 @@
         setSaveStatus("Risultato pronto per un salvataggio stub.", "status-neutral");
         renderReturnPayloadPreview(lastRunResult);
         updateSections(data);
+    }
+
+    function mergeLoadedFramesIntoResult(framesPayload) {
+        if (!lastRunResult || !lastRunResult.tpf) {
+            return;
+        }
+        lastRunResult = {
+            ...lastRunResult,
+            tpf: {
+                ...lastRunResult.tpf,
+                frames: framesPayload,
+            },
+        };
+        syncFrameStateFromResult(lastRunResult);
+        renderReturnPayloadPreview(lastRunResult);
+        renderCurrentTpfState();
+        if (lastRunResult.lightcurve && lastRunResult.lightcurve.available) {
+            renderLightcurve(lastRunResult.lightcurve);
+        }
     }
 
     async function saveCurrentResult() {
@@ -1016,6 +1146,51 @@
         renderCurrentTpfState();
         if (lastRunResult && lastRunResult.lightcurve && lastRunResult.lightcurve.available) {
             renderLightcurve(lastRunResult.lightcurve);
+        }
+    });
+
+    loadVisibleFramesButton.addEventListener("click", async function () {
+        if (!lastRunResult || !lastRunResult.tpf || !lastRunResult.tpf.frames || !lastRunResult.tpf.frames.available) {
+            return;
+        }
+
+        const frameRange = getVisibleLightcurveFrameRange();
+        if (!frameRange) {
+            setStatus("Nessuna finestra valida disponibile sulla light curve per caricare i frame.", "status-error");
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `Caricare i frame reali visibili dal cadence ${frameRange.frameStart + 1} al ${frameRange.frameEnd + 1}? L'operazione puo' richiedere tempo.`
+        );
+        if (!confirmed) {
+            return;
+        }
+
+        setError("");
+        setButtonBusy(loadVisibleFramesButton, "Caricamento frame...", true);
+        setStatus("Caricamento frame TPF visibili in corso...", "status-neutral");
+        try {
+            const { response, data } = await loadFramesWindow(
+                pageContext.gaia_source_id,
+                pageContext.sector,
+                frameRange.frameStart,
+                frameRange.frameEnd,
+            );
+            if (!response.ok || data.status === "error") {
+                setStatus("Caricamento frame fallito.", "status-error");
+                setError(data.message || `Errore HTTP ${response.status}`);
+                return;
+            }
+            mergeLoadedFramesIntoResult(data.frames);
+            setStatus(`Frame caricati: cadence ${frameRange.frameStart + 1}-${frameRange.frameEnd + 1}.`, "status-success");
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setStatus("Errore di rete durante il caricamento frame.", "status-error");
+            setError(message);
+        } finally {
+            setButtonBusy(loadVisibleFramesButton, "Caricamento frame...", false);
+            updateFrameControls(lastRunResult ? lastRunResult.tpf : null);
         }
     });
 

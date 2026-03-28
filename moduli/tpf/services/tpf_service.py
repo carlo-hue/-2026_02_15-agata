@@ -10,7 +10,7 @@ from astropy.coordinates import SkyCoord
 from ..config import settings
 from .lightcurve_service import build_auto_masks, compute_lightcurve_stub, compute_real_lightcurve, normalize_manual_masks
 from .save_service import save_tpf_session_stub
-from .tpf_data_service import load_local_tpf
+from .tpf_data_service import load_local_tpf, load_local_tpf_frames
 from .utils import (
     build_nearby_source_entry,
     build_overlay_source_entry,
@@ -309,7 +309,7 @@ def run_tpf_pipeline(gaia_source_id: str, sector, masks: dict | None = None) -> 
     )
     try:
         target_info = _fetch_gaia_dr3_target(normalized_gaia_source_id)
-        real_tpf = load_local_tpf(normalized_gaia_source_id, normalized_sector, settings.local_tpf_data_dir)
+        real_tpf = load_local_tpf(normalized_gaia_source_id, normalized_sector, settings.local_tpf_data_dir, include_frames=False)
         if real_tpf is not None:
             LOGGER.info("Using real local TPF for gaia_source_id=%s sector=%s", normalized_gaia_source_id, normalized_sector)
             raw_time = real_tpf.pop("_time_values", None)
@@ -401,3 +401,36 @@ def run_tpf_pipeline(gaia_source_id: str, sector, masks: dict | None = None) -> 
     except Exception:
         LOGGER.exception("TPF pipeline failed for gaia_source_id=%s sector=%s", normalized_gaia_source_id, normalized_sector)
         raise
+
+
+def load_tpf_frame_window(gaia_source_id: str, sector, frame_start: int, frame_end: int) -> dict:
+    normalized_gaia_source_id = validate_gaia_source_id(gaia_source_id)
+    normalized_sector = validate_sector(sector)
+    safe_frame_start = int(frame_start)
+    safe_frame_end = int(frame_end)
+    if safe_frame_start < 0 or safe_frame_end < 0:
+        raise ValueError("Intervallo frame non valido")
+    if safe_frame_end < safe_frame_start:
+        raise ValueError("Intervallo frame non valido")
+
+    frames_payload = load_local_tpf_frames(
+        normalized_gaia_source_id,
+        normalized_sector,
+        settings.local_tpf_data_dir,
+        safe_frame_start,
+        safe_frame_end,
+    )
+    if frames_payload is None:
+        raise ValueError("Frame TPF reali non disponibili per il target richiesto")
+
+    return {
+        "status": "ok",
+        "message": "Frame TPF caricati correttamente.",
+        "input": {
+            "gaia_source_id": normalized_gaia_source_id,
+            "sector": normalized_sector,
+            "frame_start": safe_frame_start,
+            "frame_end": safe_frame_end,
+        },
+        "frames": frames_payload,
+    }
