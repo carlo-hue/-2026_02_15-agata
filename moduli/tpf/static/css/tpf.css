@@ -204,11 +204,12 @@ h2 {
 .edit-mode-button,
 .overlay-toggle-button,
 .button-secondary {
-    padding: 0.75rem 1.1rem;
+    padding: 0.61rem 0.9rem;
     border: 0;
     border-radius: 10px;
     background: var(--tpf-primary);
     color: #fff;
+    font-size: 0.75rem;
     font-weight: 600;
     cursor: pointer;
     transition: opacity 0.15s ease, transform 0.15s ease;
@@ -314,10 +315,15 @@ h2 {
     margin: 0.8rem 0 0.6rem;
 }
 
+.fixed-scale-button {
+    margin-left: 0;
+}
+
 .frame-load-toolbar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    justify-content: flex-start;
     gap: 0.75rem;
     margin: 0.75rem 0 0.6rem;
 }
@@ -456,6 +462,10 @@ h2 {
 
     .frame-toolbar {
         grid-template-columns: 1fr;
+    }
+
+    .fixed-scale-button {
+        margin-left: 0;
     }
 
     .frame-toolbar-meta {

@@ -6,6 +6,7 @@
     const runButton = document.getElementById("runButton");
     const saveButton = document.getElementById("saveButton");
     const gaiaOverlayToggleButton = document.getElementById("gaiaOverlayToggleButton");
+    const fixedScaleToggleButton = document.getElementById("fixedScaleToggleButton");
     const targetModeButton = document.getElementById("targetModeButton");
     const backgroundModeButton = document.getElementById("backgroundModeButton");
     const recalcButton = document.getElementById("recalcButton");
@@ -26,9 +27,11 @@
     const overlayInfo = document.getElementById("overlayInfo");
     const tpfDetailsInfo = document.getElementById("tpfDetailsInfo");
     const overlayDetailsInfo = document.getElementById("overlayDetailsInfo");
+    const lightcurveDetailsInfo = document.getElementById("lightcurveDetailsInfo");
     const editInfo = document.getElementById("editInfo");
     const maskInfo = document.getElementById("maskInfo");
     const lightcurveInfo = document.getElementById("lightcurveInfo");
+    const lightcurveDisplayToggleButton = document.getElementById("lightcurveDisplayToggleButton");
     const tpfPlot = document.getElementById("tpfPlot");
     const lightcurvePlot = document.getElementById("lightcurvePlot");
 
@@ -40,6 +43,9 @@
     let editMode = "target";
     let editingEnabled = false;
     let gaiaOverlayEnabled = true;
+    let fixedColorScaleEnabled = false;
+    let fixedColorScaleRange = null;
+    let lightcurveDisplayMode = "lines";
     let currentFrameIndex = 0;
     let tpfFrames = [];
     let tpfFrameTimes = [];
@@ -49,10 +55,10 @@
 
     if (
         !appRoot || !form || !gaiaSourceIdInput || !sectorInput || !runButton || !saveButton
-        || !gaiaOverlayToggleButton || !targetModeButton || !backgroundModeButton || !recalcButton || !loadVisibleFramesButton
+        || !gaiaOverlayToggleButton || !fixedScaleToggleButton || !targetModeButton || !backgroundModeButton || !recalcButton || !loadVisibleFramesButton
         || !frameSlider || !frameIndexLabel || !frameTimeLabel || !frameInfo || !loadFramesInfo
         || !statusBox || !saveStatusBox || !errorBox || !output || !returnPayloadBox || !targetInfo
-        || !tpfInfo || !tpfHeaderMeta || !overlayInfo || !tpfDetailsInfo || !overlayDetailsInfo
+        || !tpfInfo || !tpfHeaderMeta || !overlayInfo || !tpfDetailsInfo || !overlayDetailsInfo || !lightcurveDetailsInfo
         || !editInfo || !maskInfo || !lightcurveInfo || !tpfPlot || !lightcurvePlot
     ) {
         return;
@@ -175,11 +181,67 @@
         lightcurvePlot.innerHTML = "";
     }
 
+    function updateFixedScaleToggleButton() {
+        if (!fixedScaleToggleButton) {
+            return;
+        }
+        fixedScaleToggleButton.textContent = fixedColorScaleEnabled ? "Scala colore fissa ON" : "Scala colore fissa OFF";
+        fixedScaleToggleButton.classList.toggle("is-off", !fixedColorScaleEnabled);
+        fixedScaleToggleButton.title = fixedColorScaleEnabled
+            ? "Disattiva la scala colore fissa e torna all'autoscale per ogni frame."
+            : "Mantiene la stessa scala colore per tutti i frame della finestra caricata.";
+    }
+
+    function updateLightcurveDisplayToggleButton() {
+        if (!lightcurveDisplayToggleButton) {
+            return;
+        }
+        lightcurveDisplayToggleButton.textContent = lightcurveDisplayMode === "markers" ? "Punti" : "Linea";
+        lightcurveDisplayToggleButton.title = lightcurveDisplayMode === "markers"
+            ? "Mostra la light curve come soli punti."
+            : "Mostra la light curve come linea continua.";
+    }
+
+    function recomputeFixedColorScaleRange() {
+        if (!fixedColorScaleEnabled || !Array.isArray(tpfFrames) || !tpfFrames.length) {
+            fixedColorScaleRange = null;
+            return;
+        }
+
+        let minValue = Infinity;
+        let maxValue = -Infinity;
+        for (const frame of tpfFrames) {
+            if (!Array.isArray(frame)) {
+                continue;
+            }
+            for (const row of frame) {
+                if (!Array.isArray(row)) {
+                    continue;
+                }
+                for (const value of row) {
+                    const numeric = Number(value);
+                    if (!Number.isFinite(numeric)) {
+                        continue;
+                    }
+                    if (numeric < minValue) minValue = numeric;
+                    if (numeric > maxValue) maxValue = numeric;
+                }
+            }
+        }
+
+        if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
+            fixedColorScaleRange = null;
+            return;
+        }
+        fixedColorScaleRange = { zmin: minValue, zmax: maxValue };
+    }
+
     function resetFrameState() {
         currentFrameIndex = 0;
         tpfFrames = [];
         tpfFrameTimes = [];
         lightcurveFrameIndices = [];
+        fixedColorScaleRange = null;
         loadedFrameStartIndex = null;
         loadedFrameEndIndex = null;
         frameSlider.min = "0";
@@ -201,6 +263,7 @@
         overlayInfo.textContent = "Overlay target/Gaia non ancora disponibile.";
         tpfDetailsInfo.textContent = "TPF non ancora richiesto.";
         overlayDetailsInfo.textContent = "Overlay target/Gaia non ancora disponibile.";
+        lightcurveDetailsInfo.textContent = "Light curve non ancora richiesta.";
         maskInfo.textContent = "Selezione automatica foreground/background non ancora disponibile.";
         maskInfo.classList.remove("warning");
         lightcurveInfo.textContent = "Light curve non ancora richiesta.";
@@ -487,7 +550,7 @@
     }
 
     function updateGaiaOverlayToggleButton() {
-        gaiaOverlayToggleButton.textContent = gaiaOverlayEnabled ? "Gaia overlay ON" : "Gaia overlay OFF";
+        gaiaOverlayToggleButton.textContent = gaiaOverlayEnabled ? "Gaia ON" : "Gaia OFF";
         gaiaOverlayToggleButton.classList.toggle("is-off", !gaiaOverlayEnabled);
         gaiaOverlayToggleButton.title = gaiaOverlayEnabled
             ? "Nasconde le sorgenti Gaia per facilitare la selezione dei pixel."
@@ -502,6 +565,8 @@
             hoverongaps: false,
             showscale: true,
             name: "TPF",
+            zmin: fixedColorScaleEnabled && fixedColorScaleRange ? fixedColorScaleRange.zmin : undefined,
+            zmax: fixedColorScaleEnabled && fixedColorScaleRange ? fixedColorScaleRange.zmax : undefined,
         }];
         const shapes = [];
         const currentTpf = buildCurrentTpfView();
@@ -599,13 +664,18 @@
     function renderLightcurve(lightcurve) {
         const time = Array.isArray(lightcurve.time) ? lightcurve.time : [];
         const corrected = Array.isArray(lightcurve.corrected_flux) ? lightcurve.corrected_flux : (Array.isArray(lightcurve.flux) ? lightcurve.flux : []);
-        const traces = [{
+        const mainTrace = {
             x: time,
             y: corrected,
-            mode: "lines",
+            mode: lightcurveDisplayMode,
             name: "Corrected Flux",
-            line: { color: "#2f7ed8", width: 2 },
-        }];
+        };
+        if (lightcurveDisplayMode === "lines") {
+            mainTrace.line = { color: "#2f7ed8", width: 2 };
+        } else {
+            mainTrace.marker = { color: "#2f7ed8", size: 5 };
+        }
+        const traces = [mainTrace];
 
         const highlightIndex = findLightcurvePointIndexForFrame(clampFrameIndex(currentFrameIndex));
         if (highlightIndex >= 0 && highlightIndex < time.length && highlightIndex < corrected.length) {
@@ -768,12 +838,14 @@
             loadedFrameStartIndex = Number.isFinite(frames.start_index) ? frames.start_index : 0;
             loadedFrameEndIndex = Number.isFinite(frames.end_index) ? frames.end_index : (loadedFrameStartIndex + frames.grids.length - 1);
             currentFrameIndex = Number.isFinite(frames.initial_index) ? frames.initial_index : loadedFrameStartIndex;
+            recomputeFixedColorScaleRange();
         } else {
             tpfFrames = [];
             tpfFrameTimes = [];
             currentFrameIndex = 0;
             loadedFrameStartIndex = null;
             loadedFrameEndIndex = null;
+            fixedColorScaleRange = null;
         }
 
         if (result && result.lightcurve && Array.isArray(result.lightcurve.frame_indices)) {
@@ -803,11 +875,13 @@
         }
 
         updateGaiaOverlayToggleButton();
+        updateFixedScaleToggleButton();
         tpfHeaderMeta.textContent = formatTpfHeaderMeta(lastRunResult);
         tpfInfo.textContent = formatTpfInfo(tpf);
         overlayInfo.textContent = formatOverlayInfo(tpf);
         tpfDetailsInfo.textContent = tpfInfo.textContent;
         overlayDetailsInfo.textContent = overlayInfo.textContent;
+        lightcurveDetailsInfo.textContent = lightcurveInfo.textContent;
         maskInfo.textContent = formatMaskInfo(tpf);
         maskInfo.classList.toggle("warning", masksNeedRecalc());
         updateFrameControls(tpf);
@@ -840,9 +914,11 @@
 
         if (data.lightcurve && data.lightcurve.available && Array.isArray(data.lightcurve.time) && Array.isArray(data.lightcurve.corrected_flux || data.lightcurve.flux)) {
             lightcurveInfo.textContent = formatLightcurveInfo(data.lightcurve);
+            lightcurveDetailsInfo.textContent = lightcurveInfo.textContent;
             renderLightcurve(data.lightcurve);
         } else {
             lightcurveInfo.textContent = formatLightcurveInfo(data.lightcurve);
+            lightcurveDetailsInfo.textContent = lightcurveInfo.textContent;
             Plotly.purge(lightcurvePlot);
             lightcurvePlot.innerHTML = "";
         }
@@ -1149,6 +1225,25 @@
         }
     });
 
+    if (fixedScaleToggleButton) {
+        fixedScaleToggleButton.addEventListener("click", function () {
+            fixedColorScaleEnabled = !fixedColorScaleEnabled;
+            recomputeFixedColorScaleRange();
+            updateFixedScaleToggleButton();
+            renderCurrentTpfState();
+        });
+    }
+
+    if (lightcurveDisplayToggleButton) {
+        lightcurveDisplayToggleButton.addEventListener("click", function () {
+            lightcurveDisplayMode = lightcurveDisplayMode === "lines" ? "markers" : "lines";
+            updateLightcurveDisplayToggleButton();
+            if (lastRunResult && lastRunResult.lightcurve && lastRunResult.lightcurve.available) {
+                renderLightcurve(lastRunResult.lightcurve);
+            }
+        });
+    }
+
     loadVisibleFramesButton.addEventListener("click", async function () {
         if (!lastRunResult || !lastRunResult.tpf || !lastRunResult.tpf.frames || !lastRunResult.tpf.frames.available) {
             return;
@@ -1207,5 +1302,7 @@
 
     updateEditingControls();
     updateGaiaOverlayToggleButton();
+    updateFixedScaleToggleButton();
+    updateLightcurveDisplayToggleButton();
     renderReturnPayloadPreview(null);
 })();

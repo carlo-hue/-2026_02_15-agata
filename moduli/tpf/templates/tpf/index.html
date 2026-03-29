@@ -56,6 +56,7 @@
                         <button type="button" id="targetModeButton" class="edit-mode-button is-active" disabled>Target</button>
                         <button type="button" id="backgroundModeButton" class="edit-mode-button" disabled>Background</button>
                         <button type="button" id="recalcButton" class="button-secondary" disabled>Ricalcola light curve</button>
+                        <button type="button" id="fixedScaleToggleButton" class="overlay-toggle-button fixed-scale-button">Scala colore fissa OFF</button>
                     </div>
                     <div id="editInfo" class="edit-info detail-text">Editing pixel disponibile solo con TPF reale.</div>
                     <div id="maskInfo" class="mask-info detail-text">Selezione automatica foreground/background non ancora disponibile.</div>
@@ -65,11 +66,12 @@
 
                 <section class="panel">
                     <h2>Light Curve</h2>
-                    <div id="lightcurveInfo" class="panel-note">Light curve non ancora richiesta.</div>
+                    <div id="lightcurveInfo" class="hidden">Light curve non ancora richiesta.</div>
                     <div id="lightcurvePlot" class="plot-box"></div>
                     <div class="frame-load-toolbar">
                         <button type="button" id="loadVisibleFramesButton" class="button-secondary" disabled>Carica frame visibili</button>
                         <span id="loadFramesInfo" class="detail-text">Fai zoom sulla light curve e usa questo pulsante per caricare solo i cadence visibili.</span>
+                        <button type="button" id="lightcurveDisplayToggleButton" class="overlay-toggle-button">Linea</button>
                     </div>
                     <div class="frame-toolbar">
                         <label for="frameSlider" class="frame-toolbar-label">Frame</label>
@@ -124,6 +126,7 @@
                 <h2>Dettagli TPF</h2>
                 <div id="tpfDetailsInfo" class="detail-block detail-text">TPF non ancora richiesto.</div>
                 <div id="overlayDetailsInfo" class="detail-block detail-text">Overlay target/Gaia non ancora disponibile.</div>
+                <div id="lightcurveDetailsInfo" class="detail-block detail-text">Light curve non ancora richiesta.</div>
             </section>
 
             <section class="hero-panel">
