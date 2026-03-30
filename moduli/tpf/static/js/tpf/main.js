@@ -11,6 +11,10 @@
     const backgroundModeButton = document.getElementById("backgroundModeButton");
     const recalcButton = document.getElementById("recalcButton");
     const loadVisibleFramesButton = document.getElementById("loadVisibleFramesButton");
+    const findMastSectorsButton = document.getElementById("findMastSectorsButton");
+    const mastCutoutSizeInput = document.getElementById("mastCutoutSizeInput");
+    const mastStatusInfo = document.getElementById("mastStatusInfo");
+    const mastSectorsBox = document.getElementById("mastSectorsBox");
     const frameSlider = document.getElementById("frameSlider");
     const frameIndexLabel = document.getElementById("frameIndexLabel");
     const frameTimeLabel = document.getElementById("frameTimeLabel");
@@ -52,6 +56,8 @@
     let lightcurveFrameIndices = [];
     let loadedFrameStartIndex = null;
     let loadedFrameEndIndex = null;
+    let lastMastSectorsResult = null;
+    let mastHasRemoteResults = false;
 
     if (
         !appRoot || !form || !gaiaSourceIdInput || !sectorInput || !runButton || !saveButton
@@ -67,6 +73,9 @@
     const endpointUrls = {
         runUrl: appRoot.dataset.runUrl || "/tpf/api/run",
         framesUrl: appRoot.dataset.framesUrl || "/tpf/api/frames",
+        mastLocalSectorsUrl: appRoot.dataset.mastLocalSectorsUrl || "/tpf/api/mast/local-sectors",
+        mastSectorsUrl: appRoot.dataset.mastSectorsUrl || "/tpf/api/mast/sectors",
+        mastDownloadUrl: appRoot.dataset.mastDownloadUrl || "/tpf/api/mast/download",
         saveUrl: appRoot.dataset.saveUrl || "/tpf/api/save",
     };
 
@@ -75,6 +84,7 @@
         gaia_source_id: appRoot.dataset.gaiaSourceId || "",
         sector: appRoot.dataset.sector || "",
         source_context: appRoot.dataset.sourceContext || null,
+        default_cutout_size: appRoot.dataset.defaultCutoutSize || "10",
     };
 
     function setStatus(message, tone) {
@@ -98,11 +108,29 @@
     }
 
     function setButtonBusy(button, busyText, isBusy) {
+        if (!button) {
+            return;
+        }
         if (!button.dataset.originalText) {
             button.dataset.originalText = button.textContent;
         }
         button.textContent = isBusy ? busyText : button.dataset.originalText;
         button.disabled = isBusy;
+    }
+
+    function setMastStatus(message, tone) {
+        if (!mastStatusInfo) {
+            return;
+        }
+        mastStatusInfo.textContent = message || "-";
+        mastStatusInfo.className = "detail-block detail-text";
+        if (tone === "success") {
+            mastStatusInfo.classList.add("is-success");
+        } else if (tone === "warning") {
+            mastStatusInfo.classList.add("is-warning");
+        } else if (tone === "error") {
+            mastStatusInfo.classList.add("is-error");
+        }
     }
 
     function escapeHtml(text) {
@@ -112,6 +140,16 @@
             .replace(/>/g, "&gt;")
             .replace(/\"/g, "&quot;")
             .replace(/'/g, "&#39;");
+    }
+
+    function getCurrentMastCutoutSize() {
+        const fallback = String(pageContext.default_cutout_size || "10").trim() || "10";
+        const raw = mastCutoutSizeInput ? String(mastCutoutSizeInput.value || "").trim() : fallback;
+        if (!raw) {
+            return fallback;
+        }
+        const numeric = parseInt(raw, 10);
+        return Number.isFinite(numeric) && numeric > 0 ? String(numeric) : fallback;
     }
 
     function cloneMask(maskMatrix) {
@@ -269,6 +307,69 @@
         lightcurveInfo.textContent = "Light curve non ancora richiesta.";
         editInfo.textContent = "Editing pixel disponibile solo con TPF reale.";
         resetFrameState();
+    }
+
+    function renderMastSectors(data) {
+        if (!mastSectorsBox) {
+            return;
+        }
+
+        if (!data || !Array.isArray(data.sectors) || !data.sectors.length) {
+            mastSectorsBox.className = "mast-sectors-box empty-state";
+            mastSectorsBox.innerHTML = "<div>Nessun settore TESS disponibile.</div>";
+            return;
+        }
+
+        const orderedSectors = data.sectors.slice().sort((left, right) => {
+            const leftDownloaded = !!(left && left.downloaded);
+            const rightDownloaded = !!(right && right.downloaded);
+            if (leftDownloaded !== rightDownloaded) {
+                return leftDownloaded ? -1 : 1;
+            }
+            return Number(left && left.sector) - Number(right && right.sector);
+        });
+
+        const rowsHtml = orderedSectors.map((entry) => {
+            const sector = entry && entry.sector !== undefined ? entry.sector : "-";
+            const downloaded = !!(entry && entry.downloaded);
+            const subtitle = downloaded ? "Gia' scaricato localmente" : "Non ancora scaricato localmente";
+            const filename = entry && entry.filename ? entry.filename : "Nessun file locale";
+            const buttonLabel = downloaded ? "Riusa" : "Scarica TPF";
+            const actionAttr = downloaded ? "data-mast-reuse" : "data-mast-download";
+            const inlineMeta = `Sector ${escapeHtml(sector)} | ${escapeHtml(subtitle)} | ${escapeHtml(filename)}`;
+            return `
+                <div class="mast-sector-row${downloaded ? " is-downloaded" : ""}">
+                    <div class="mast-sector-meta">
+                        <div class="mast-sector-inline">${inlineMeta}</div>
+                    </div>
+                    <div class="mast-sector-actions">
+                        <button
+                            type="button"
+                            class="button-secondary"
+                            ${actionAttr}="1"
+                            data-sector="${escapeHtml(sector)}"
+                        >${escapeHtml(buttonLabel)}</button>
+                    </div>
+                </div>
+            `;
+        }).join("");
+
+        const footerHtml = mastHasRemoteResults
+            ? ""
+            : `
+                <div class="mast-sector-row mast-sector-row-footer">
+                    <div class="mast-sector-meta">
+                        <div class="mast-sector-title">Altri settori TESS</div>
+                        <div class="mast-sector-subtitle">Verifica se esistono altri TPF non ancora scaricati per questa sorgente.</div>
+                    </div>
+                    <div class="mast-sector-actions">
+                        <button type="button" class="button-secondary" data-mast-check-remote="1">Verifica altri TPF</button>
+                    </div>
+                </div>
+            `;
+
+        mastSectorsBox.className = "mast-sectors-box";
+        mastSectorsBox.innerHTML = rowsHtml + footerHtml;
     }
 
     function renderTarget(target) {
@@ -992,6 +1093,55 @@
         returnPayloadBox.textContent = JSON.stringify(buildAgataReturnPayload(result, pageContext), null, 2);
     }
 
+    async function fetchMastSectors(gaiaId, cutoutSize) {
+        const response = await fetch(endpointUrls.mastSectorsUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                gaia_id: gaiaId,
+                cutout_size: cutoutSize,
+            }),
+        });
+        const data = await response.json().catch(() => ({ ok: false, status: "error", message: "Risposta JSON non valida" }));
+        output.textContent = JSON.stringify(data, null, 2);
+        return { response, data };
+    }
+
+    async function fetchLocalMastSectors(gaiaId, cutoutSize) {
+        const response = await fetch(endpointUrls.mastLocalSectorsUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                gaia_id: gaiaId,
+                cutout_size: cutoutSize,
+            }),
+        });
+        const data = await response.json().catch(() => ({ ok: false, status: "error", message: "Risposta JSON non valida" }));
+        output.textContent = JSON.stringify(data, null, 2);
+        return { response, data };
+    }
+
+    async function downloadMastTpf(gaiaId, sector, cutoutSize) {
+        const response = await fetch(endpointUrls.mastDownloadUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                gaia_id: gaiaId,
+                sector: sector,
+                cutout_size: cutoutSize,
+            }),
+        });
+        const data = await response.json().catch(() => ({ ok: false, status: "error", message: "Risposta JSON non valida" }));
+        output.textContent = JSON.stringify(data, null, 2);
+        return { response, data };
+    }
+
     async function runPipeline(gaiaSourceId, sector, masks) {
         const response = await fetch(endpointUrls.runUrl, {
             method: "POST",
@@ -1063,6 +1213,192 @@
         }
     }
 
+    async function startPipelineRun(gaiaSourceId, sector) {
+        pageContext.gaia_source_id = gaiaSourceId;
+        pageContext.sector = sector;
+        if (gaiaSourceIdInput) {
+            gaiaSourceIdInput.value = gaiaSourceId;
+        }
+        if (sectorInput) {
+            sectorInput.value = sector;
+        }
+
+        setError("");
+        setStatus("Loading... esecuzione pipeline in corso.", "status-neutral");
+        setSaveStatus("Nessun salvataggio eseguito.", "status-neutral");
+        output.textContent = JSON.stringify({ status: "ok", message: "Loading..." }, null, 2);
+        lastRunResult = null;
+        targetMask = [];
+        backgroundMask = [];
+        committedTargetMask = [];
+        committedBackgroundMask = [];
+        editingEnabled = false;
+        saveButton.disabled = true;
+        updateEditingControls();
+        resetFrameState();
+        setButtonBusy(runButton, "Loading...", true);
+        clearPlots();
+        resetSections();
+        renderReturnPayloadPreview(null);
+
+        try {
+            const { response, data } = await runPipeline(gaiaSourceId, sector, null);
+            if (!response.ok || data.status === "error") {
+                lastRunResult = null;
+                saveButton.disabled = true;
+                setStatus(data.message || "Pipeline completata con errore.", "status-error");
+                setError(data.message || `Errore HTTP ${response.status}`);
+                renderReturnPayloadPreview(null);
+                updateSections(data || {});
+                return false;
+            }
+            await handlePipelineSuccess(data, null);
+            return true;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            lastRunResult = null;
+            saveButton.disabled = true;
+            setStatus("Errore di rete durante la pipeline.", "status-error");
+            setError(message);
+            output.textContent = JSON.stringify({ status: "error", message }, null, 2);
+            clearPlots();
+            resetSections();
+            renderReturnPayloadPreview(null);
+            return false;
+        } finally {
+            setButtonBusy(runButton, "Loading...", false);
+        }
+    }
+
+    async function handleMastSectorSearch() {
+        const gaiaId = String(gaiaSourceIdInput.value || "").trim();
+        const cutoutSize = getCurrentMastCutoutSize();
+        setError("");
+        setMastStatus("Controllo TPF locali in corso...", "warning");
+        setButtonBusy(findMastSectorsButton, "Ricerca...", true);
+        try {
+            const { response, data } = await fetchLocalMastSectors(gaiaId, cutoutSize);
+            if (!response.ok || data.ok === false || data.status === "error") {
+                lastMastSectorsResult = null;
+                renderMastSectors(null);
+                setMastStatus(data.message || `Errore HTTP ${response.status}`, "error");
+                return;
+            }
+
+            lastMastSectorsResult = data;
+            mastHasRemoteResults = false;
+            renderMastSectors(data);
+
+            const localCount = Array.isArray(data.sectors) ? data.sectors.length : 0;
+            if (localCount > 0) {
+                setMastStatus(`TPF locali trovati per gaia_id=${data.gaia_id}: ${localCount}.`, "success");
+            } else {
+                setMastStatus(`Nessun TPF locale trovato per gaia_id=${data.gaia_id}.`, "warning");
+                const shouldCheckRemote = window.confirm(
+                    "Non risultano TPF locali per questa sorgente. Vuoi verificare se esistono settori TESS disponibili su MAST?"
+                );
+                if (shouldCheckRemote) {
+                    await handleMastRemoteSectorSearch(findMastSectorsButton);
+                }
+            }
+        } catch (error) {
+            lastMastSectorsResult = null;
+            mastHasRemoteResults = false;
+            renderMastSectors(null);
+            const message = error instanceof Error ? error.message : String(error);
+            setMastStatus(`Errore di rete durante il controllo settori: ${message}`, "error");
+        } finally {
+            setButtonBusy(findMastSectorsButton, "Ricerca...", false);
+        }
+    }
+
+    async function handleMastRemoteSectorSearch(buttonElement) {
+        const gaiaId = String(gaiaSourceIdInput.value || "").trim();
+        const cutoutSize = getCurrentMastCutoutSize();
+        setError("");
+        setMastStatus("Ricerca completa settori TESS in corso...", "warning");
+        setButtonBusy(buttonElement, "Verifica...", true);
+        try {
+            const { response, data } = await fetchMastSectors(gaiaId, cutoutSize);
+            if (!response.ok || data.ok === false || data.status === "error") {
+                setMastStatus(data.message || `Errore HTTP ${response.status}`, "error");
+                return;
+            }
+
+            lastMastSectorsResult = data;
+            mastHasRemoteResults = true;
+            renderMastSectors(data);
+            if (data.ra !== undefined && data.dec !== undefined) {
+                setMastStatus(
+                    `Settori TESS trovati per gaia_id=${data.gaia_id} | ra=${data.ra} | dec=${data.dec} | gmag=${data.gmag ?? "-"}`,
+                    "success"
+                );
+            } else {
+                setMastStatus(`Settori TESS trovati per gaia_id=${data.gaia_id}.`, "success");
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setMastStatus(`Errore di rete durante la ricerca completa dei settori: ${message}`, "error");
+        } finally {
+            setButtonBusy(buttonElement, "Verifica...", false);
+        }
+    }
+
+    async function handleMastDownload(sector, buttonElement) {
+        const gaiaId = String(gaiaSourceIdInput.value || "").trim();
+        const cutoutSize = getCurrentMastCutoutSize();
+        setError("");
+        setMastStatus(`Download TPF in corso per sector=${sector}...`, "warning");
+        setButtonBusy(buttonElement, "Download...", true);
+        try {
+            const { response, data } = await downloadMastTpf(gaiaId, sector, cutoutSize);
+            if (!response.ok || data.ok === false || data.status === "error") {
+                setMastStatus(data.message || `Errore HTTP ${response.status}`, "error");
+                return;
+            }
+
+            if (lastMastSectorsResult && Array.isArray(lastMastSectorsResult.sectors)) {
+                lastMastSectorsResult = {
+                    ...lastMastSectorsResult,
+                    sectors: lastMastSectorsResult.sectors.map((entry) => (
+                        entry.sector === Number(sector)
+                            ? { ...entry, downloaded: true, filename: data.filename || entry.filename || null }
+                            : entry
+                    )),
+                };
+                renderMastSectors(lastMastSectorsResult);
+            }
+
+            setMastStatus(data.message || "TPF scaricato con successo.", "success");
+            const openViewer = window.confirm("TPF pronto. Vuoi aprirlo ora nel viewer TPF esistente?");
+            if (openViewer) {
+                await startPipelineRun(gaiaId, String(sector));
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setMastStatus(`Errore di rete durante il download TPF: ${message}`, "error");
+        } finally {
+            setButtonBusy(buttonElement, "Download...", false);
+        }
+    }
+
+    async function handleMastReuse(sector, buttonElement) {
+        const gaiaId = String(gaiaSourceIdInput.value || "").trim();
+        setError("");
+        setButtonBusy(buttonElement, "Apertura...", true);
+        setMastStatus(`Apertura del TPF locale per sector=${sector}...`, "warning");
+        try {
+            const opened = await startPipelineRun(gaiaId, String(sector));
+            if (opened) {
+                setMastStatus(`TPF locale riusato e aperto nel viewer per sector=${sector}.`, "success");
+            } else {
+                setMastStatus(`Impossibile aprire il TPF locale per sector=${sector}.`, "error");
+            }
+        } finally {
+            setButtonBusy(buttonElement, "Apertura...", false);
+        }
+    }
+
     async function saveCurrentResult() {
         if (!lastRunResult) {
             setSaveStatus("Nessun risultato disponibile da salvare.", "status-error");
@@ -1130,51 +1466,7 @@
         event.preventDefault();
         const gaiaSourceId = String(gaiaSourceIdInput.value || "").trim();
         const sector = String(sectorInput.value || "").trim();
-        pageContext.gaia_source_id = gaiaSourceId;
-        pageContext.sector = sector;
-        setError("");
-        setStatus("Loading... esecuzione pipeline in corso.", "status-neutral");
-        setSaveStatus("Nessun salvataggio eseguito.", "status-neutral");
-        output.textContent = JSON.stringify({ status: "ok", message: "Loading..." }, null, 2);
-        lastRunResult = null;
-        targetMask = [];
-        backgroundMask = [];
-        committedTargetMask = [];
-        committedBackgroundMask = [];
-        editingEnabled = false;
-        saveButton.disabled = true;
-        updateEditingControls();
-        resetFrameState();
-        setButtonBusy(runButton, "Loading...", true);
-        clearPlots();
-        resetSections();
-        renderReturnPayloadPreview(null);
-
-        try {
-            const { response, data } = await runPipeline(gaiaSourceId, sector, null);
-            if (!response.ok || data.status === "error") {
-                lastRunResult = null;
-                saveButton.disabled = true;
-                setStatus(data.message || "Pipeline completata con errore.", "status-error");
-                setError(data.message || `Errore HTTP ${response.status}`);
-                renderReturnPayloadPreview(null);
-                updateSections(data || {});
-                return;
-            }
-            await handlePipelineSuccess(data, null);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            lastRunResult = null;
-            saveButton.disabled = true;
-            setStatus("Errore di rete durante la pipeline.", "status-error");
-            setError(message);
-            output.textContent = JSON.stringify({ status: "error", message }, null, 2);
-            clearPlots();
-            resetSections();
-            renderReturnPayloadPreview(null);
-        } finally {
-            setButtonBusy(runButton, "Loading...", false);
-        }
+        await startPipelineRun(gaiaSourceId, sector);
     });
 
     recalcButton.addEventListener("click", async function () {
@@ -1244,6 +1536,49 @@
         });
     }
 
+    if (findMastSectorsButton) {
+        findMastSectorsButton.addEventListener("click", function () {
+            handleMastSectorSearch();
+        });
+    }
+
+    if (mastSectorsBox) {
+        mastSectorsBox.addEventListener("click", function (event) {
+            const downloadButton = event.target && typeof event.target.closest === "function"
+                ? event.target.closest("[data-mast-download]")
+                : null;
+            const reuseButton = event.target && typeof event.target.closest === "function"
+                ? event.target.closest("[data-mast-reuse]")
+                : null;
+            const remoteCheckButton = event.target && typeof event.target.closest === "function"
+                ? event.target.closest("[data-mast-check-remote]")
+                : null;
+
+            if (downloadButton) {
+                const sector = downloadButton.dataset.sector;
+                if (!sector) {
+                    return;
+                }
+                handleMastDownload(sector, downloadButton);
+                return;
+            }
+
+            if (remoteCheckButton) {
+                handleMastRemoteSectorSearch(remoteCheckButton);
+                return;
+            }
+
+            if (!reuseButton) {
+                return;
+            }
+            const sector = reuseButton.dataset.sector;
+            if (!sector) {
+                return;
+            }
+            handleMastReuse(sector, reuseButton);
+        });
+    }
+
     loadVisibleFramesButton.addEventListener("click", async function () {
         if (!lastRunResult || !lastRunResult.tpf || !lastRunResult.tpf.frames || !lastRunResult.tpf.frames.available) {
             return;
@@ -1304,5 +1639,7 @@
     updateGaiaOverlayToggleButton();
     updateFixedScaleToggleButton();
     updateLightcurveDisplayToggleButton();
+    setMastStatus('Usa il Gaia source id sopra, poi premi "Controlla TPF locali".', null);
+    renderMastSectors(null);
     renderReturnPayloadPreview(null);
 })();

@@ -19,6 +19,18 @@ def validate_sector(value) -> int:
     return int(normalized)
 
 
+def validate_cutout_size(value, default: int = 10) -> int:
+    if value in (None, ""):
+        return int(default)
+    normalized = str(value).strip()
+    if not normalized.isdigit():
+        raise ValueError("cutout_size non valido")
+    cutout_size = int(normalized)
+    if cutout_size <= 0:
+        raise ValueError("cutout_size non valido")
+    return cutout_size
+
+
 def rounded_or_none(value, digits: int = 6):
     if value is None:
         return None

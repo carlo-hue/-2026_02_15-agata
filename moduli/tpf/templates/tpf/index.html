@@ -40,11 +40,15 @@
             class="page-shell"
             data-run-url="{{ url_for('tpf.run_api') }}"
             data-frames-url="{{ url_for('tpf.frames_api') }}"
+            data-mast-local-sectors-url="{{ url_for('tpf.mast_local_sectors_api') }}"
+            data-mast-sectors-url="{{ url_for('tpf.mast_sectors_api') }}"
+            data-mast-download-url="{{ url_for('tpf.mast_download_api') }}"
             data-save-url="{{ url_for('tpf.save_api') }}"
             data-mode="{{ page_context.mode }}"
             data-gaia-source-id="{{ page_context.gaia_source_id }}"
             data-sector="{{ page_context.sector }}"
             data-source-context="{{ page_context.source_context }}"
+            data-default-cutout-size="{{ default_cutout_size }}"
         >
             <section class="grid-layout">
                 <section class="panel">
@@ -111,6 +115,19 @@
                         <button type="button" id="saveButton" class="button-secondary" disabled>Salva sessione</button>
                     </div>
                 </form>
+            </section>
+
+            <section class="panel panel-mast">
+                <h2>MAST / TESS</h2>
+                <div class="mast-toolbar">
+                    <div class="mast-cutout-field">
+                        <label for="mastCutoutSizeInput">cutout_size</label>
+                        <input id="mastCutoutSizeInput" type="number" min="1" step="1" value="{{ default_cutout_size }}">
+                    </div>
+                    <button type="button" id="findMastSectorsButton" class="button-secondary">Controlla TPF locali</button>
+                    <div id="mastStatusInfo" class="detail-block detail-text">Usa il Gaia source id sopra, poi premi "Controlla TPF locali".</div>
+                </div>
+                <div id="mastSectorsBox" class="mast-sectors-box empty-state">Nessun settore TESS caricato.</div>
             </section>
 
             <section class="panel">

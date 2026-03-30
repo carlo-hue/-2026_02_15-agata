@@ -7,24 +7,48 @@ import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 
+from ..config import settings
+
 LOGGER = logging.getLogger(__name__)
 
 
 def _build_expected_candidates(gaia_source_id: str, sector: int, data_dir: str) -> list[Path]:
     base_dir = Path(data_dir)
     stem = f"{gaia_source_id}_num_sett_TESS_{sector}"
-    return [base_dir / f"{stem}.fit", base_dir / f"{stem}.fits"]
+    source_dir = base_dir / str(gaia_source_id)
+    return [
+        base_dir / f"{stem}.fit",
+        base_dir / f"{stem}.fits",
+        source_dir / f"{stem}.fit",
+        source_dir / f"{stem}.fits",
+    ]
+
+
+def _build_downloaded_candidates(gaia_source_id: str, sector: int) -> list[Path]:
+    download_dir = Path(settings.mast_tpf_download_dir)
+    source_dir = download_dir / str(gaia_source_id)
+    exact = [
+        source_dir / f"tpf_gaia_{gaia_source_id}_s{sector}_cut{settings.default_cutout_size}.fits",
+        source_dir / f"tpf_gaia_{gaia_source_id}_s{sector}_cut{settings.default_cutout_size}.fit",
+    ]
+    wildcard = sorted(source_dir.glob(f"tpf_gaia_{gaia_source_id}_s{sector}_cut*.fits"))
+    return exact + wildcard
 
 
 def _find_local_tpf_file(gaia_source_id: str, sector: int, data_dir: str) -> Path | None:
     base_dir = Path(data_dir)
-    if not base_dir.exists() or not base_dir.is_dir():
-        LOGGER.warning("Local TPF data directory not available: %s", base_dir)
-        return None
+    if base_dir.exists() and base_dir.is_dir():
+        for candidate in _build_expected_candidates(gaia_source_id, sector, data_dir):
+            if candidate.exists() and candidate.is_file():
+                return candidate
+    else:
+        LOGGER.warning("Local legacy TPF data directory not available: %s", base_dir)
 
-    for candidate in _build_expected_candidates(gaia_source_id, sector, data_dir):
-        if candidate.exists() and candidate.is_file():
-            return candidate
+    download_dir = Path(settings.mast_tpf_download_dir)
+    if download_dir.exists() and download_dir.is_dir():
+        for candidate in _build_downloaded_candidates(gaia_source_id, sector):
+            if candidate.exists() and candidate.is_file():
+                return candidate
     return None
 
 
@@ -115,8 +139,21 @@ def _build_serialized_frame_window(flux_cube: np.ndarray, time_values: np.ndarra
     return serialized
 
 
+def _detect_source_info(file_path: Path) -> tuple[str, str]:
+    download_dir = Path(settings.mast_tpf_download_dir)
+    try:
+        resolved_path = file_path.resolve()
+        resolved_download_dir = download_dir.resolve()
+        is_download = resolved_download_dir in resolved_path.parents
+    except Exception:
+        is_download = False
+    if is_download:
+        return "mast_download_local", "TPF reale caricato da file locale scaricato da MAST/TESS."
+    return "local_test_data", "TPF reale caricato da file locale di prova."
+
+
 def load_local_tpf(gaia_source_id: str, sector: int, data_dir: str, *, include_frames: bool = False) -> dict | None:
-    LOGGER.info("Attempting local TPF load for gaia_source_id=%s sector=%s from %s", gaia_source_id, sector, data_dir)
+    LOGGER.info("Attempting local TPF load for gaia_source_id=%s sector=%s", gaia_source_id, sector)
     try:
         file_path = _find_local_tpf_file(gaia_source_id, sector, data_dir)
         if file_path is None:
@@ -150,18 +187,19 @@ def load_local_tpf(gaia_source_id: str, sector: int, data_dir: str, *, include_f
             ticid = pixels_header.get("TICID") or primary_header.get("TICID")
             shape = [len(flux_grid), len(flux_grid[0]) if flux_grid else 0]
             cadence_count = int(flux_cube.shape[0]) if flux_cube.ndim == 3 else 1
+            source_type, message = _detect_source_info(file_path)
 
             payload = {
                 "status": "ok",
                 "available": True,
                 "mode": "real",
-                "message": "TPF reale caricato da file locale di prova.",
+                "message": message,
                 "shape": shape,
                 "cadence_count": cadence_count,
                 "flux_grid": flux_grid,
                 "frames": frames_payload,
                 "source": {
-                    "type": "local_test_data",
+                    "type": source_type,
                     "path": str(file_path),
                     "filename": file_path.name,
                     "lookup_key": {

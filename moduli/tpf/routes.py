@@ -5,14 +5,20 @@ import logging
 from flask import Blueprint, current_app, jsonify, render_template, request, url_for
 
 from .config import settings
-from .services import load_tpf_frame_window, run_tpf_pipeline, save_tpf_session_stub
-from .services.utils import validate_sector
+from .services import download_tpf_from_mast, get_local_tpf_sectors_for_gaia, get_mast_sectors_for_gaia, load_tpf_frame_window, run_tpf_pipeline, save_tpf_session_stub
+from .services.utils import validate_cutout_size, validate_gaia_source_id, validate_sector
 
 LOGGER = logging.getLogger(__name__)
 
 
 def _json_error(message: str, status_code: int = 400):
     return jsonify({"status": "error", "message": message}), status_code
+
+
+def _mast_json_error(message: str, status_code: int = 400, **extra):
+    payload = {"ok": False, "status": "error", "message": message}
+    payload.update(extra)
+    return jsonify(payload), status_code
 
 
 def _build_page_context(args) -> dict:
@@ -54,6 +60,7 @@ def create_blueprint() -> Blueprint:
             module_title=settings.module_title,
             scaffold_message=settings.placeholder_message,
             page_context=page_context,
+            default_cutout_size=settings.default_cutout_size,
             module_links={
                 "admin": _optional_url("admin.list_projects"),
                 "variable_stars": _optional_url("variable_stars.index"),
@@ -154,6 +161,88 @@ def create_blueprint() -> Blueprint:
                 frame_end,
             )
             return _json_error(str(err), 502)
+        return jsonify(result)
+
+    @bp.post("/api/mast/sectors")
+    def mast_sectors_api():
+        payload = request.get_json(silent=True) or {}
+        if not isinstance(payload, dict):
+            return _mast_json_error("payload JSON non valido", 400)
+
+        gaia_id_raw = payload.get("gaia_id", "")
+        cutout_size_raw = payload.get("cutout_size", settings.default_cutout_size)
+        try:
+            gaia_id = validate_gaia_source_id(gaia_id_raw)
+            cutout_size = validate_cutout_size(cutout_size_raw, settings.default_cutout_size)
+        except ValueError as err:
+            return _mast_json_error(str(err), 400)
+
+        LOGGER.info("MAST sector listing requested for gaia_id=%s cutout_size=%s", gaia_id, cutout_size)
+        try:
+            result = get_mast_sectors_for_gaia(gaia_id, cutout_size=cutout_size)
+        except ValueError as err:
+            LOGGER.warning("MAST sector listing validation error for gaia_id=%s: %s", gaia_id, err)
+            return _mast_json_error(str(err), 400, gaia_id=gaia_id)
+        except Exception as err:
+            LOGGER.exception("MAST sector listing failed for gaia_id=%s", gaia_id)
+            return _mast_json_error(str(err), 502, gaia_id=gaia_id)
+        return jsonify(result)
+
+    @bp.post("/api/mast/local-sectors")
+    def mast_local_sectors_api():
+        payload = request.get_json(silent=True) or {}
+        if not isinstance(payload, dict):
+            return _mast_json_error("payload JSON non valido", 400)
+
+        gaia_id_raw = payload.get("gaia_id", "")
+        cutout_size_raw = payload.get("cutout_size", settings.default_cutout_size)
+        try:
+            gaia_id = validate_gaia_source_id(gaia_id_raw)
+            cutout_size = validate_cutout_size(cutout_size_raw, settings.default_cutout_size)
+        except ValueError as err:
+            return _mast_json_error(str(err), 400)
+
+        LOGGER.info("Local TPF sector listing requested for gaia_id=%s cutout_size=%s", gaia_id, cutout_size)
+        try:
+            result = get_local_tpf_sectors_for_gaia(gaia_id, cutout_size=cutout_size)
+        except ValueError as err:
+            LOGGER.warning("Local TPF sector listing validation error for gaia_id=%s: %s", gaia_id, err)
+            return _mast_json_error(str(err), 400, gaia_id=gaia_id)
+        except Exception as err:
+            LOGGER.exception("Local TPF sector listing failed for gaia_id=%s", gaia_id)
+            return _mast_json_error(str(err), 502, gaia_id=gaia_id)
+        return jsonify(result)
+
+    @bp.post("/api/mast/download")
+    def mast_download_api():
+        payload = request.get_json(silent=True) or {}
+        if not isinstance(payload, dict):
+            return _mast_json_error("payload JSON non valido", 400)
+
+        gaia_id_raw = payload.get("gaia_id", "")
+        sector_raw = payload.get("sector", "")
+        cutout_size_raw = payload.get("cutout_size", settings.default_cutout_size)
+        try:
+            gaia_id = validate_gaia_source_id(gaia_id_raw)
+            sector = validate_sector(sector_raw)
+            cutout_size = validate_cutout_size(cutout_size_raw, settings.default_cutout_size)
+        except ValueError as err:
+            return _mast_json_error(str(err), 400)
+
+        LOGGER.info(
+            "MAST TPF download requested for gaia_id=%s sector=%s cutout_size=%s",
+            gaia_id,
+            sector,
+            cutout_size,
+        )
+        try:
+            result = download_tpf_from_mast(gaia_id, sector, cutout_size=cutout_size)
+        except ValueError as err:
+            LOGGER.warning("MAST TPF download validation error for gaia_id=%s sector=%s: %s", gaia_id, sector, err)
+            return _mast_json_error(str(err), 400, gaia_id=gaia_id, sector=sector, cutout_size=cutout_size)
+        except Exception as err:
+            LOGGER.exception("MAST TPF download failed for gaia_id=%s sector=%s", gaia_id, sector)
+            return _mast_json_error(str(err), 502, gaia_id=gaia_id, sector=sector, cutout_size=cutout_size)
         return jsonify(result)
 
     @bp.post("/api/save")
