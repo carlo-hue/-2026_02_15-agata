@@ -12,6 +12,29 @@ from ..config import settings
 LOGGER = logging.getLogger(__name__)
 
 
+def _first_header_value(headers: list, keys: list[str]):
+    for key in keys:
+        for header in headers:
+            value = header.get(key)
+            if value is not None:
+                return value, key
+    return None, None
+
+
+def _normalize_tessmag(value):
+    if value is None:
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(numeric):
+        return None
+    if numeric <= 0.0 or numeric >= 30.0:
+        return None
+    return numeric
+
+
 def _build_expected_candidates(gaia_source_id: str, sector: int, data_dir: str) -> list[Path]:
     base_dir = Path(data_dir)
     stem = f"{gaia_source_id}_num_sett_TESS_{sector}"
@@ -172,6 +195,7 @@ def load_local_tpf(gaia_source_id: str, sector: int, data_dir: str, *, include_f
             frames_payload = _build_serialized_frames(flux_cube, time_values) if include_frames else _build_frames_metadata_payload(flux_cube)
             primary_header = hdul[0].header
             pixels_header = pixels_hdu.header
+            headers = [pixels_header, primary_header]
             try:
                 tpf_wcs = WCS(pixels_hdu.header, fobj=hdul, keysel=["binary"])
                 if not tpf_wcs.has_celestial:
@@ -183,11 +207,21 @@ def load_local_tpf(gaia_source_id: str, sector: int, data_dir: str, *, include_f
             header_sector = pixels_header.get("SECTOR") or primary_header.get("SECTOR")
             camera = pixels_header.get("CAMERA") or primary_header.get("CAMERA")
             ccd = pixels_header.get("CCD") or primary_header.get("CCD")
-            tessmag = pixels_header.get("TESSMAG") or primary_header.get("TESSMAG")
+            tessmag, tessmag_key = _first_header_value(headers, ["TESSMAG", "TMAG", "MAG"])
+            tessmag = _normalize_tessmag(tessmag)
+            if tessmag is None:
+                tessmag_key = None
             ticid = pixels_header.get("TICID") or primary_header.get("TICID")
+            bjd_ref_i, bjd_ref_i_key = _first_header_value(headers, ["BJDREFI"])
+            bjd_ref_f, bjd_ref_f_key = _first_header_value(headers, ["BJDREFF"])
+            time_system, time_system_key = _first_header_value(headers, ["TIMESYS"])
+            time_unit, time_unit_key = _first_header_value(headers, ["TIMEUNIT"])
             shape = [len(flux_grid), len(flux_grid[0]) if flux_grid else 0]
             cadence_count = int(flux_cube.shape[0]) if flux_cube.ndim == 3 else 1
             source_type, message = _detect_source_info(file_path)
+            bjd_ref = None
+            if bjd_ref_i is not None or bjd_ref_f is not None:
+                bjd_ref = float(bjd_ref_i or 0.0) + float(bjd_ref_f or 0.0)
 
             payload = {
                 "status": "ok",
@@ -211,8 +245,19 @@ def load_local_tpf(gaia_source_id: str, sector: int, data_dir: str, *, include_f
                     "sector": int(header_sector) if header_sector is not None else None,
                     "camera": int(camera) if camera is not None else None,
                     "ccd": int(ccd) if ccd is not None else None,
-                    "tessmag": float(tessmag) if tessmag is not None else None,
+                    "tessmag": tessmag,
+                    "tessmag_key": tessmag_key,
                     "ticid": int(ticid) if ticid is not None else None,
+                    "time_format": "BTJD",
+                    "time_system": time_system or "TDB",
+                    "time_system_key": time_system_key,
+                    "time_unit": time_unit,
+                    "time_unit_key": time_unit_key,
+                    "bjd_ref_i": float(bjd_ref_i) if bjd_ref_i is not None else None,
+                    "bjd_ref_i_key": bjd_ref_i_key,
+                    "bjd_ref_f": float(bjd_ref_f) if bjd_ref_f is not None else None,
+                    "bjd_ref_f_key": bjd_ref_f_key,
+                    "bjd_ref": bjd_ref,
                 },
                 "_time_values": time_values,
                 "_flux_cube": flux_cube,

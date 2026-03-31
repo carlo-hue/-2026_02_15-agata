@@ -4,6 +4,7 @@ import logging
 import math
 
 from astroquery.gaia import Gaia
+from astroquery.mast import Catalogs
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 
@@ -26,6 +27,9 @@ NEARBY_RADIUS_DEG = 0.02
 PREVIEW_SIZE_PX = 11
 MAX_NEARBY_SOURCES = 25
 MAX_OVERLAY_SOURCES = 50
+AUTO_TARGET_THRESHOLD_SIGMA = 15.0
+AUTO_BACKGROUND_THRESHOLD_SIGMA = 0.001
+TIC_REFERENCE_RADIUS_ARCSEC = 5.0
 
 
 def _empty_masks_payload(message: str) -> dict:
@@ -129,6 +133,75 @@ def _fetch_nearby_gaia_sources(target_info: dict, radius_deg: float = NEARBY_RAD
         )
     entries.sort(key=lambda item: item.get("dist_arcsec") if item.get("dist_arcsec") is not None else float("inf"))
     return entries
+
+
+def _resolve_reference_magnitude(target_info: dict, tpf_metadata: dict | None) -> dict:
+    metadata = dict(tpf_metadata or {})
+    header_tessmag = metadata.get("tessmag")
+    header_tessmag_key = metadata.get("tessmag_key")
+    if header_tessmag is not None:
+        LOGGER.info(
+            "Using TESS magnitude from TPF header for gaia_source_id=%s key=%s value=%s",
+            target_info.get("gaia_source_id"),
+            header_tessmag_key,
+            header_tessmag,
+        )
+        metadata["reference_mag_value"] = header_tessmag
+        metadata["reference_mag_band"] = "TESS"
+        metadata["reference_mag_key"] = header_tessmag_key or "TESSMAG"
+        metadata["reference_mag_source"] = "tpf_header"
+        return metadata
+
+    try:
+        coord = SkyCoord(
+            ra=float(target_info["ra_deg"]) * u.deg,
+            dec=float(target_info["dec_deg"]) * u.deg,
+            frame="icrs",
+        )
+        catalog = Catalogs.query_region(coord, radius=(TIC_REFERENCE_RADIUS_ARCSEC * u.arcsec), catalog="TIC")
+        if catalog is not None and len(catalog) > 0:
+            catalog_sorted = catalog
+            if "dstArcSec" in catalog.colnames:
+                catalog_sorted = catalog[np.argsort(catalog["dstArcSec"])]
+            best_row = catalog_sorted[0]
+            tmag_value = best_row["Tmag"] if "Tmag" in catalog.colnames else None
+            if tmag_value is not None:
+                tmag_numeric = rounded_or_none(tmag_value, 6)
+                if tmag_numeric is not None and 0.0 < float(tmag_numeric) < 30.0:
+                    LOGGER.info(
+                        "Using TIC catalog Tmag for gaia_source_id=%s value=%s",
+                        target_info.get("gaia_source_id"),
+                        tmag_numeric,
+                    )
+                    metadata["reference_mag_value"] = float(tmag_numeric)
+                    metadata["reference_mag_band"] = "TESS"
+                    metadata["reference_mag_key"] = "Tmag"
+                    metadata["reference_mag_source"] = "tic_catalog"
+                    if "ID" in catalog.colnames:
+                        metadata["reference_mag_catalog_id"] = str(best_row["ID"])
+                    return metadata
+    except Exception:
+        LOGGER.exception("TIC reference magnitude lookup failed for gaia_source_id=%s", target_info.get("gaia_source_id"))
+
+    gaia_gmag = target_info.get("gmag")
+    if gaia_gmag is not None:
+        LOGGER.info(
+            "Falling back to Gaia G magnitude for gaia_source_id=%s value=%s",
+            target_info.get("gaia_source_id"),
+            gaia_gmag,
+        )
+        metadata["reference_mag_value"] = gaia_gmag
+        metadata["reference_mag_band"] = "Gaia G"
+        metadata["reference_mag_key"] = "phot_g_mean_mag"
+        metadata["reference_mag_source"] = "gaia_catalog_fallback"
+        return metadata
+
+    LOGGER.info("No reference magnitude available for gaia_source_id=%s", target_info.get("gaia_source_id"))
+    metadata["reference_mag_value"] = None
+    metadata["reference_mag_band"] = None
+    metadata["reference_mag_key"] = None
+    metadata["reference_mag_source"] = None
+    return metadata
 
 
 def _estimate_overlay_radius_deg(shape: tuple[int, int] | list[int]) -> float:
@@ -316,6 +389,7 @@ def run_tpf_pipeline(gaia_source_id: str, sector, masks: dict | None = None) -> 
             raw_flux_cube = real_tpf.pop("_flux_cube", None)
             tpf_wcs = real_tpf.pop("_wcs", None)
             tpf_payload = real_tpf
+            tpf_payload["metadata"] = _resolve_reference_magnitude(target_info, tpf_payload.get("metadata"))
             tpf_payload["overlay"] = _build_real_tpf_overlay(target_info, tpf_payload, tpf_wcs)
             pipeline_mode = "real"
             tpf_payload["masks"] = _empty_masks_payload("Maschere non disponibili.")
@@ -326,21 +400,44 @@ def run_tpf_pipeline(gaia_source_id: str, sector, masks: dict | None = None) -> 
             )
             if raw_time is not None and raw_flux_cube is not None:
                 if masks is not None:
-                    masks_payload, target_mask, background_mask = normalize_manual_masks(masks, tuple(raw_flux_cube.shape[1:]))
-                    tpf_payload["masks"] = masks_payload
-                    lightcurve = compute_real_lightcurve(
-                        raw_time,
-                        raw_flux_cube,
-                        target_mask,
-                        background_mask,
-                        mode="real-manual-mask",
-                        message="Light curve aggiornata con maschere modificate manualmente.",
-                    )
+                        masks_payload, target_mask, background_mask = normalize_manual_masks(masks, tuple(raw_flux_cube.shape[1:]))
+                        tpf_payload["masks"] = masks_payload
+                        lightcurve = compute_real_lightcurve(
+                            raw_time,
+                            raw_flux_cube,
+                            target_mask,
+                            background_mask,
+                            gaia_source_id=normalized_gaia_source_id,
+                            tpf_source=tpf_payload.get("source"),
+                            tpf_metadata=tpf_payload.get("metadata"),
+                            extraction_metadata={
+                                "mask_origin": "manual",
+                                "target_threshold": None,
+                                "background_threshold": None,
+                                "sigma_clipping": None,
+                            },
+                            mode="real-manual-mask",
+                            message="Light curve aggiornata con maschere modificate manualmente.",
+                        )
                 else:
                     try:
                         masks_payload, target_mask, background_mask = build_auto_masks(raw_flux_cube)
                         tpf_payload["masks"] = masks_payload
-                        lightcurve = compute_real_lightcurve(raw_time, raw_flux_cube, target_mask, background_mask)
+                        lightcurve = compute_real_lightcurve(
+                            raw_time,
+                            raw_flux_cube,
+                            target_mask,
+                            background_mask,
+                            gaia_source_id=normalized_gaia_source_id,
+                            tpf_source=tpf_payload.get("source"),
+                            tpf_metadata=tpf_payload.get("metadata"),
+                            extraction_metadata={
+                                "mask_origin": "auto",
+                                "target_threshold": f"median_grid > background + {AUTO_TARGET_THRESHOLD_SIGMA} * scatter",
+                                "background_threshold": f"median_grid <= background + {AUTO_BACKGROUND_THRESHOLD_SIGMA} * scatter",
+                                "sigma_clipping": None,
+                            },
+                        )
                     except Exception as err:
                         LOGGER.exception(
                             "Automatic mask/light curve generation failed for gaia_source_id=%s sector=%s",
@@ -377,8 +474,13 @@ def run_tpf_pipeline(gaia_source_id: str, sector, masks: dict | None = None) -> 
         save_payload = {
             "input": {"gaia_source_id": normalized_gaia_source_id, "sector": normalized_sector},
             "target": target_info,
-            "tpf": {"available": bool(tpf_payload.get("available"))},
-            "lightcurve": {"available": bool(lightcurve.get("available"))},
+            "tpf": {
+                "available": bool(tpf_payload.get("available")),
+                "source": tpf_payload.get("source"),
+                "metadata": tpf_payload.get("metadata"),
+                "masks": tpf_payload.get("masks"),
+            },
+            "lightcurve": lightcurve,
         }
         save_result = save_tpf_session_stub(save_payload)
         return {

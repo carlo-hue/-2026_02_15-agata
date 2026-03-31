@@ -110,6 +110,68 @@ Regole di editing:
 
 Il backend valida le maschere ricevute e ricalcola la light curve usando quelle nuove.
 
+## Conversione flux -> magnitudine
+
+Per i TPF reali il backend salva ora, oltre alla curva in flusso:
+
+- `flux_corrected`
+- `mag_instr`
+- `mag_tess_anchored`
+
+Regole adottate:
+
+- `mag_instr = -2.5 * log10(flux_corrected)` solo per i punti con `flux_corrected > 0`
+- i punti con flusso non positivo non mandano in errore la pipeline
+- i punti esclusi dalla conversione vengono contati e registrati nei metadata
+- non viene usato alcuno zeropoint fotometrico fisso
+
+Se nel TPF reale e' disponibile una magnitudine TESS del target:
+
+- viene letta da `TESSMAG` o keyword equivalente nel FITS
+- la curva viene ancorata con:
+  - `delta = tessmag_ref - median(mag_instr)`
+  - `mag_tess_anchored = mag_instr + delta`
+- viene salvata anche la keyword FITS effettivamente usata come riferimento
+
+Se la magnitudine TESS non e' disponibile:
+
+- `mag_instr` resta disponibile
+- `mag_tess_anchored` resta non ancorata e viene serializzata come `null`
+- il metadata di ancoraggio resta vuoto
+
+## Riferimento temporale e riproducibilita'
+
+Per ogni light curve reale il modulo salva anche:
+
+- `time_btjd`
+- `time_bjd`
+- `time_format`
+- `time_system`
+- `bjd_ref`
+
+Scelta adottata:
+
+- `time_btjd` usa i valori `TIME` originali del TPF reale
+- `time_bjd` viene derivato come `TIME + BJDREFI + BJDREFF`
+- il riferimento temporale viene letto dai metadata FITS del TPF reale, non hardcodato
+
+Nel payload della light curve vengono inoltre salvati i dati necessari a riprodurre la curva a partire dal solo TPF:
+
+- filename e path del TPF sorgente
+- `gaia_id`, `sector`, `camera`, `ccd`, `cutout_size`
+- maschere come lista di coordinate pixel:
+  - `target_pixels`
+  - `background_pixels`
+- parametri di estrazione:
+  - origine maschera `auto` / `manual`
+  - threshold target/background se disponibili
+  - metodo di stima del background
+- parametri di ancoraggio magnitudine:
+  - `reference_mag_value`
+  - `reference_mag_band = "TESS"`
+  - `reference_mag_key`
+  - `anchoring_method = "median_shift"`
+
 ## Navigazione temporale del TPF
 
 Quando il TPF reale e' disponibile:
@@ -241,6 +303,11 @@ La pagina mostra:
 - pulsante `Ricalcola light curve`
 - riepilogo del numero di pixel target/background
 - light curve reale corretta aggiornata dopo il ricalcolo
+- dati backend della light curve con:
+  - `time_btjd`
+  - `time_bjd`
+  - `mag_instr`
+  - `mag_tess_anchored`
 - fallback a preview sintetica quando il TPF reale non e' disponibile
 - pannello `MAST / TESS` per cercare e scaricare TPF reali da MAST/TESS
 - evidenza dei settori gia' presenti localmente nella cartella download del modulo

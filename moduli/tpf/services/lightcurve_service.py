@@ -10,6 +10,98 @@ from .utils import rounded_or_none
 LOGGER = logging.getLogger(__name__)
 
 
+def _mask_to_pixel_list(mask: np.ndarray) -> list[list[int]]:
+    positions = np.argwhere(np.asarray(mask, dtype=bool))
+    return [[int(row), int(col)] for row, col in positions]
+
+
+def _build_time_metadata(time_arr: np.ndarray, tpf_metadata: dict | None = None) -> tuple[list[float], list[float], dict]:
+    metadata = tpf_metadata or {}
+    bjd_ref_i = metadata.get("bjd_ref_i")
+    bjd_ref_f = metadata.get("bjd_ref_f")
+    bjd_ref = metadata.get("bjd_ref")
+    if bjd_ref is None:
+        ref_i = float(bjd_ref_i) if bjd_ref_i is not None else 0.0
+        ref_f = float(bjd_ref_f) if bjd_ref_f is not None else 0.0
+        bjd_ref = ref_i + ref_f
+
+    time_btjd = np.round(time_arr, 6).tolist()
+    time_bjd = np.round(time_arr + float(bjd_ref), 6).tolist()
+    time_system = metadata.get("time_system") or "TDB"
+    time_format = metadata.get("time_format") or "BTJD"
+    LOGGER.info(
+        "Using time reference for light curve: time_format=%s time_system=%s bjd_ref=%s",
+        time_format,
+        time_system,
+        bjd_ref,
+    )
+    return time_btjd, time_bjd, {
+        "time_format": str(time_format),
+        "time_system": str(time_system),
+        "bjd_ref": rounded_or_none(bjd_ref, 9),
+    }
+
+
+def convert_flux_to_magnitude(
+    corrected_flux: np.ndarray,
+    *,
+    reference_mag_value: float | None = None,
+    reference_mag_key: str | None = None,
+    reference_mag_band: str | None = None,
+    reference_mag_source: str | None = None,
+) -> dict:
+    flux_arr = np.asarray(corrected_flux, dtype=float)
+    positive_mask = np.isfinite(flux_arr) & (flux_arr > 0.0)
+    excluded_nonpositive = int(np.count_nonzero(np.isfinite(flux_arr) & (flux_arr <= 0.0)))
+    invalid_nonfinite = int(np.count_nonzero(~np.isfinite(flux_arr)))
+
+    mag_instr_arr = np.full(flux_arr.shape, np.nan, dtype=float)
+    mag_tess_arr = np.full(flux_arr.shape, np.nan, dtype=float)
+
+    if np.any(positive_mask):
+        mag_instr_arr[positive_mask] = -2.5 * np.log10(flux_arr[positive_mask])
+
+    anchoring_applied = False
+    if reference_mag_value is not None and np.any(np.isfinite(mag_instr_arr)):
+        median_mag_instr = float(np.nanmedian(mag_instr_arr))
+        delta = float(reference_mag_value) - median_mag_instr
+        mag_tess_arr[positive_mask] = mag_instr_arr[positive_mask] + delta
+        anchoring_applied = True
+        LOGGER.info(
+            "Anchored instrumental magnitudes to TESS reference: key=%s value=%s delta=%s",
+            reference_mag_key,
+            reference_mag_value,
+            rounded_or_none(delta, 6),
+        )
+    else:
+        LOGGER.info("No reliable TESS reference magnitude available: keeping only instrumental magnitudes")
+
+    if excluded_nonpositive > 0 or invalid_nonfinite > 0:
+        LOGGER.info(
+            "Excluded points from flux->mag conversion: nonpositive=%s nonfinite=%s",
+            excluded_nonpositive,
+            invalid_nonfinite,
+        )
+
+    def _serialize(series: np.ndarray) -> list[float | None]:
+        return [rounded_or_none(value, 6) if np.isfinite(value) else None for value in series]
+
+    return {
+        "mag_instr": _serialize(mag_instr_arr),
+        "mag_tess_anchored": _serialize(mag_tess_arr) if anchoring_applied else [None for _ in flux_arr],
+        "metadata": {
+            "anchoring_applied": anchoring_applied,
+            "reference_mag_value": rounded_or_none(reference_mag_value, 6) if reference_mag_value is not None else None,
+            "reference_mag_band": reference_mag_band if reference_mag_value is not None else None,
+            "reference_mag_key": reference_mag_key if reference_mag_value is not None else None,
+            "reference_mag_source": reference_mag_source if reference_mag_value is not None else None,
+            "anchoring_method": "median_shift" if anchoring_applied else None,
+            "excluded_nonpositive_flux_points": excluded_nonpositive,
+            "excluded_nonfinite_flux_points": invalid_nonfinite,
+        },
+    }
+
+
 def compute_lightcurve_stub(gaia_source_id: str, target_info: dict | None = None, message: str | None = None) -> dict:
     return {
         "status": "ok",
@@ -18,11 +110,36 @@ def compute_lightcurve_stub(gaia_source_id: str, target_info: dict | None = None
         "gaia_source_id": gaia_source_id,
         "message": message or "Light curve non ancora disponibile in questa fase.",
         "time": [],
+        "time_btjd": [],
+        "time_bjd": [],
         "flux": [],
         "corrected_flux": [],
         "target_flux": [],
         "background_flux_per_pixel": [],
+        "mag_instr": [],
+        "mag_tess_anchored": [],
         "frame_indices": [],
+        "series": {
+            "time_btjd": [],
+            "time_bjd": [],
+            "flux_corrected": [],
+            "mag_instr": [],
+            "mag_tess_anchored": [],
+        },
+        "masks": {
+            "target_pixels": [],
+            "background_pixels": [],
+        },
+        "metadata": {
+            "reference_mag_value": None,
+            "reference_mag_band": None,
+            "reference_mag_key": None,
+            "anchoring_method": None,
+            "time_format": None,
+            "time_system": None,
+            "bjd_ref": None,
+            "excluded_nonpositive_flux_points": 0,
+        },
         "summary": {
             "target_gmag": rounded_or_none((target_info or {}).get("gmag"), 4),
             "x_axis": "time",
@@ -213,6 +330,10 @@ def compute_real_lightcurve(
     target_mask: np.ndarray,
     background_mask: np.ndarray,
     *,
+    gaia_source_id: str | None = None,
+    tpf_source: dict | None = None,
+    tpf_metadata: dict | None = None,
+    extraction_metadata: dict | None = None,
     mode: str = "real-auto-mask",
     message: str = "Light curve reale calcolata con maschere iniziali automatiche.",
 ) -> dict:
@@ -252,6 +373,36 @@ def compute_real_lightcurve(
     background_out = np.round(background_flux_per_pixel[valid], 6).tolist()
     corrected_out = np.round(corrected_flux[valid], 6).tolist()
     frame_indices = np.flatnonzero(valid).astype(int).tolist()
+    time_btjd_out, time_bjd_out, time_metadata = _build_time_metadata(time_arr[valid], tpf_metadata)
+
+    metadata = tpf_metadata or {}
+    reference_mag_value = metadata.get("reference_mag_value", metadata.get("tessmag"))
+    reference_mag_key = metadata.get("reference_mag_key", metadata.get("tessmag_key"))
+    reference_mag_band = metadata.get("reference_mag_band")
+    reference_mag_source = metadata.get("reference_mag_source")
+    if reference_mag_value is not None:
+        LOGGER.info(
+            "Reference magnitude found for gaia_source_id=%s: band=%s source=%s key=%s value=%s",
+            gaia_source_id,
+            reference_mag_band,
+            reference_mag_source,
+            reference_mag_key,
+            rounded_or_none(reference_mag_value, 6),
+        )
+    else:
+        LOGGER.info("Reference magnitude not available for gaia_source_id=%s", gaia_source_id)
+
+    magnitude_payload = convert_flux_to_magnitude(
+        corrected_flux[valid],
+        reference_mag_value=reference_mag_value,
+        reference_mag_key=reference_mag_key,
+        reference_mag_band=reference_mag_band,
+        reference_mag_source=reference_mag_source,
+    )
+    target_pixels_list = _mask_to_pixel_list(target_mask)
+    background_pixels_list = _mask_to_pixel_list(background_mask)
+    source_payload = tpf_source or {}
+    extraction_payload = extraction_metadata or {}
 
     LOGGER.info(
         "Computed real light curve with target_pixels=%s background_pixels=%s points=%s mode=%s",
@@ -267,11 +418,51 @@ def compute_real_lightcurve(
         "mode": mode,
         "message": message,
         "time": time_out,
+        "time_btjd": time_btjd_out,
+        "time_bjd": time_bjd_out,
         "flux": corrected_out,
         "target_flux": target_flux_out,
         "background_flux_per_pixel": background_out,
         "corrected_flux": corrected_out,
+        "mag_instr": magnitude_payload["mag_instr"],
+        "mag_tess_anchored": magnitude_payload["mag_tess_anchored"],
         "frame_indices": frame_indices,
+        "series": {
+            "time_btjd": time_btjd_out,
+            "time_bjd": time_bjd_out,
+            "flux_corrected": corrected_out,
+            "mag_instr": magnitude_payload["mag_instr"],
+            "mag_tess_anchored": magnitude_payload["mag_tess_anchored"],
+        },
+        "masks": {
+            "target_pixels": target_pixels_list,
+            "background_pixels": background_pixels_list,
+        },
+        "metadata": {
+            "tpf_filename": source_payload.get("filename"),
+            "tpf_path": source_payload.get("path"),
+            "gaia_id": gaia_source_id,
+            "sector": metadata.get("sector"),
+            "camera": metadata.get("camera"),
+            "ccd": metadata.get("ccd"),
+            "cutout_size": int(cube.shape[1]) if cube.ndim == 3 else None,
+            "time_format": time_metadata["time_format"],
+            "time_system": time_metadata["time_system"],
+            "bjd_ref": time_metadata["bjd_ref"],
+            "reference_mag_value": magnitude_payload["metadata"]["reference_mag_value"],
+            "reference_mag_band": magnitude_payload["metadata"]["reference_mag_band"],
+            "reference_mag_key": magnitude_payload["metadata"]["reference_mag_key"],
+            "reference_mag_source": magnitude_payload["metadata"]["reference_mag_source"],
+            "anchoring_method": magnitude_payload["metadata"]["anchoring_method"],
+            "anchoring_applied": magnitude_payload["metadata"]["anchoring_applied"],
+            "background_method": "mean_background_per_pixel_scaled_to_target",
+            "excluded_nonpositive_flux_points": magnitude_payload["metadata"]["excluded_nonpositive_flux_points"],
+            "excluded_nonfinite_flux_points": magnitude_payload["metadata"]["excluded_nonfinite_flux_points"],
+            "target_threshold": extraction_payload.get("target_threshold"),
+            "background_threshold": extraction_payload.get("background_threshold"),
+            "sigma_clipping": extraction_payload.get("sigma_clipping"),
+            "mask_origin": extraction_payload.get("mask_origin"),
+        },
         "summary": {
             "target_pixels": target_pixels,
             "background_pixels": background_pixels,

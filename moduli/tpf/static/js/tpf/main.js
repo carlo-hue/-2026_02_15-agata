@@ -35,6 +35,7 @@
     const editInfo = document.getElementById("editInfo");
     const maskInfo = document.getElementById("maskInfo");
     const lightcurveInfo = document.getElementById("lightcurveInfo");
+    const lightcurveSeriesToggleButton = document.getElementById("lightcurveSeriesToggleButton");
     const lightcurveDisplayToggleButton = document.getElementById("lightcurveDisplayToggleButton");
     const tpfPlot = document.getElementById("tpfPlot");
     const lightcurvePlot = document.getElementById("lightcurvePlot");
@@ -49,6 +50,7 @@
     let gaiaOverlayEnabled = true;
     let fixedColorScaleEnabled = false;
     let fixedColorScaleRange = null;
+    let lightcurveSeriesMode = "flux";
     let lightcurveDisplayMode = "lines";
     let currentFrameIndex = 0;
     let tpfFrames = [];
@@ -69,6 +71,8 @@
     ) {
         return;
     }
+
+    const LIGHTCURVE_SERIES_MODES = ["flux", "mag_ref"];
 
     const endpointUrls = {
         runUrl: appRoot.dataset.runUrl || "/tpf/api/run",
@@ -234,10 +238,76 @@
         if (!lightcurveDisplayToggleButton) {
             return;
         }
-        lightcurveDisplayToggleButton.textContent = lightcurveDisplayMode === "markers" ? "Punti" : "Linea";
+        lightcurveDisplayToggleButton.textContent = lightcurveDisplayMode === "markers" ? "Linea" : "Punti";
         lightcurveDisplayToggleButton.title = lightcurveDisplayMode === "markers"
-            ? "Mostra la light curve come soli punti."
-            : "Mostra la light curve come linea continua.";
+            ? "Passa alla visualizzazione come linea continua."
+            : "Passa alla visualizzazione come soli punti.";
+    }
+
+    function getAvailableLightcurveSeriesModes(lightcurve) {
+        const available = ["flux"];
+        const anchoringApplied = !!(lightcurve && lightcurve.metadata && lightcurve.metadata.anchoring_applied);
+        if (
+            anchoringApplied
+            && lightcurve
+            && Array.isArray(lightcurve.mag_tess_anchored)
+            && lightcurve.mag_tess_anchored.some((value) => value !== null && Number.isFinite(Number(value)))
+        ) {
+            available.push("mag_ref");
+        }
+        return available;
+    }
+
+    function getLightcurveSeriesConfig(lightcurve) {
+        const availableModes = getAvailableLightcurveSeriesModes(lightcurve);
+        if (!availableModes.includes(lightcurveSeriesMode)) {
+            lightcurveSeriesMode = availableModes[0] || "flux";
+        }
+
+        if (lightcurveSeriesMode === "mag_ref") {
+            const values = Array.isArray(lightcurve && lightcurve.mag_tess_anchored) ? lightcurve.mag_tess_anchored : [];
+            const referenceBand = lightcurve && lightcurve.metadata && lightcurve.metadata.reference_mag_band
+                ? String(lightcurve.metadata.reference_mag_band)
+                : "ref";
+            return {
+                mode: "mag_ref",
+                values,
+                traceName: `Mag ${referenceBand} anchored`,
+                title: `Light Curve Ancorata a ${referenceBand}`,
+                yAxisTitle: `Mag ${referenceBand} anchored`,
+                reverseYAxis: true,
+                hoverLabel: "mag",
+            };
+        }
+        const values = Array.isArray(lightcurve && lightcurve.corrected_flux) ? lightcurve.corrected_flux : (Array.isArray(lightcurve && lightcurve.flux) ? lightcurve.flux : []);
+        return {
+            mode: "flux",
+            values,
+            traceName: "Corrected Flux",
+            title: "Light Curve Corretta",
+            yAxisTitle: "Corrected Flux",
+            reverseYAxis: false,
+            hoverLabel: "flux",
+        };
+    }
+
+    function updateLightcurveSeriesToggleButton(lightcurve) {
+        if (!lightcurveSeriesToggleButton) {
+            return;
+        }
+        const config = getLightcurveSeriesConfig(lightcurve || (lastRunResult ? lastRunResult.lightcurve : null));
+        const referenceBand = lightcurve && lightcurve.metadata && lightcurve.metadata.reference_mag_band
+            ? String(lightcurve.metadata.reference_mag_band)
+            : "ref";
+        const availableModes = getAvailableLightcurveSeriesModes(lightcurve || (lastRunResult ? lastRunResult.lightcurve : null));
+        const currentIndex = availableModes.indexOf(config.mode);
+        const nextMode = currentIndex >= 0 ? availableModes[(currentIndex + 1) % availableModes.length] : "flux";
+        const labels = {
+            flux: "Flux",
+            mag_ref: referenceBand === "Gaia G" ? "Mag Gaia" : `Mag ${referenceBand}`,
+        };
+        lightcurveSeriesToggleButton.textContent = labels[nextMode] || "Flux";
+        lightcurveSeriesToggleButton.title = `Passa alla serie ${labels[nextMode] || "Flux"}`;
     }
 
     function recomputeFixedColorScaleRange() {
@@ -305,6 +375,7 @@
         maskInfo.textContent = "Selezione automatica foreground/background non ancora disponibile.";
         maskInfo.classList.remove("warning");
         lightcurveInfo.textContent = "Light curve non ancora richiesta.";
+        updateLightcurveSeriesToggleButton(null);
         editInfo.textContent = "Editing pixel disponibile solo con TPF reale.";
         resetFrameState();
     }
@@ -763,13 +834,15 @@
     }
 
     function renderLightcurve(lightcurve) {
+        updateLightcurveSeriesToggleButton(lightcurve);
         const time = Array.isArray(lightcurve.time) ? lightcurve.time : [];
-        const corrected = Array.isArray(lightcurve.corrected_flux) ? lightcurve.corrected_flux : (Array.isArray(lightcurve.flux) ? lightcurve.flux : []);
+        const seriesConfig = getLightcurveSeriesConfig(lightcurve);
+        const corrected = Array.isArray(seriesConfig.values) ? seriesConfig.values : [];
         const mainTrace = {
             x: time,
             y: corrected,
             mode: lightcurveDisplayMode,
-            name: "Corrected Flux",
+            name: seriesConfig.traceName,
         };
         if (lightcurveDisplayMode === "lines") {
             mainTrace.line = { color: "#2f7ed8", width: 2 };
@@ -793,16 +866,19 @@
                         width: 1.5,
                     },
                 },
-                hovertemplate: "Frame corrente<br>time=%{x}<br>flux=%{y}<extra></extra>",
+                hovertemplate: `Frame corrente<br>time=%{x}<br>${seriesConfig.hoverLabel}=%{y}<extra></extra>`,
             });
         }
 
         const layout = {
-            title: "Light Curve Corretta",
+            title: seriesConfig.title,
             margin: { t: 40, r: 20, b: 40, l: 50 },
             xaxis: { title: "Time" },
-            yaxis: { title: "Corrected Flux" },
-            uirevision: "lightcurve-view",
+            yaxis: {
+                title: seriesConfig.yAxisTitle,
+                autorange: seriesConfig.reverseYAxis ? "reversed" : true,
+            },
+            uirevision: `lightcurve-view-${seriesConfig.mode}-${lightcurveDisplayMode}`,
         };
         const renderPromise = lightcurvePlot.data
             ? Plotly.react(lightcurvePlot, traces, layout, { responsive: true, displayModeBar: false })
@@ -877,6 +953,7 @@
         const parts = [];
         if (lightcurve.message) parts.push(lightcurve.message);
         if (lightcurve.mode) parts.push(`mode=${lightcurve.mode}`);
+        parts.push(`series=${getLightcurveSeriesConfig(lightcurve).mode}`);
         if (lightcurve.summary && lightcurve.summary.target_pixels !== undefined) parts.push(`target_pixels=${lightcurve.summary.target_pixels}`);
         if (lightcurve.summary && lightcurve.summary.background_pixels !== undefined) parts.push(`background_pixels=${lightcurve.summary.background_pixels}`);
         return parts.join(" | ") || "Light curve disponibile.";
@@ -1020,6 +1097,7 @@
         } else {
             lightcurveInfo.textContent = formatLightcurveInfo(data.lightcurve);
             lightcurveDetailsInfo.textContent = lightcurveInfo.textContent;
+            updateLightcurveSeriesToggleButton(null);
             Plotly.purge(lightcurvePlot);
             lightcurvePlot.innerHTML = "";
         }
@@ -1536,6 +1614,20 @@
         });
     }
 
+    if (lightcurveSeriesToggleButton) {
+        lightcurveSeriesToggleButton.addEventListener("click", function () {
+            const availableModes = getAvailableLightcurveSeriesModes(lastRunResult ? lastRunResult.lightcurve : null);
+            const currentIndex = availableModes.indexOf(lightcurveSeriesMode);
+            const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % availableModes.length : 0;
+            lightcurveSeriesMode = availableModes[nextIndex] || "flux";
+            updateLightcurveSeriesToggleButton(lastRunResult ? lastRunResult.lightcurve : null);
+            if (lastRunResult && lastRunResult.lightcurve && lastRunResult.lightcurve.available) {
+                renderLightcurve(lastRunResult.lightcurve);
+                lightcurveInfo.textContent = formatLightcurveInfo(lastRunResult.lightcurve);
+            }
+        });
+    }
+
     if (findMastSectorsButton) {
         findMastSectorsButton.addEventListener("click", function () {
             handleMastSectorSearch();
@@ -1638,6 +1730,7 @@
     updateEditingControls();
     updateGaiaOverlayToggleButton();
     updateFixedScaleToggleButton();
+    updateLightcurveSeriesToggleButton(null);
     updateLightcurveDisplayToggleButton();
     setMastStatus('Usa il Gaia source id sopra, poi premi "Controlla TPF locali".', null);
     renderMastSectors(null);
