@@ -37,6 +37,7 @@
     const lightcurveInfo = document.getElementById("lightcurveInfo");
     const lightcurveSeriesToggleButton = document.getElementById("lightcurveSeriesToggleButton");
     const lightcurveDisplayToggleButton = document.getElementById("lightcurveDisplayToggleButton");
+    const lightcurveResetZoomButton = document.getElementById("lightcurveResetZoomButton");
     const tpfPlot = document.getElementById("tpfPlot");
     const lightcurvePlot = document.getElementById("lightcurvePlot");
 
@@ -269,11 +270,12 @@
             const referenceBand = lightcurve && lightcurve.metadata && lightcurve.metadata.reference_mag_band
                 ? String(lightcurve.metadata.reference_mag_band)
                 : "ref";
+            const compactReferenceBand = referenceBand === "Gaia G" ? "Gaia" : referenceBand;
             return {
                 mode: "mag_ref",
                 values,
                 traceName: `Mag ${referenceBand} anchored`,
-                title: `Light Curve Ancorata a ${referenceBand}`,
+                title: `Mag Light Curve (${compactReferenceBand})`,
                 yAxisTitle: `Mag ${referenceBand} anchored`,
                 reverseYAxis: true,
                 hoverLabel: "mag",
@@ -284,11 +286,27 @@
             mode: "flux",
             values,
             traceName: "Corrected Flux",
-            title: "Light Curve Corretta",
+            title: "Flux Light Curve",
             yAxisTitle: "Corrected Flux",
             reverseYAxis: false,
             hoverLabel: "flux",
         };
+    }
+
+    function getCurrentAxisRange(axisName) {
+        if (!lightcurvePlot || !lightcurvePlot.layout || !lightcurvePlot.layout[axisName]) {
+            return null;
+        }
+        const axis = lightcurvePlot.layout[axisName];
+        if (!Array.isArray(axis.range) || axis.range.length !== 2) {
+            return null;
+        }
+        const start = Number(axis.range[0]);
+        const end = Number(axis.range[1]);
+        if (!Number.isFinite(start) || !Number.isFinite(end)) {
+            return null;
+        }
+        return [start, end];
     }
 
     function updateLightcurveSeriesToggleButton(lightcurve) {
@@ -838,6 +856,9 @@
         const time = Array.isArray(lightcurve.time) ? lightcurve.time : [];
         const seriesConfig = getLightcurveSeriesConfig(lightcurve);
         const corrected = Array.isArray(seriesConfig.values) ? seriesConfig.values : [];
+        const previousXRange = getCurrentAxisRange("xaxis");
+        const previousYRange = getCurrentAxisRange("yaxis");
+        const previousSeriesMode = lightcurvePlot && lightcurvePlot.__seriesMode ? lightcurvePlot.__seriesMode : null;
         const mainTrace = {
             x: time,
             y: corrected,
@@ -878,12 +899,21 @@
                 title: seriesConfig.yAxisTitle,
                 autorange: seriesConfig.reverseYAxis ? "reversed" : true,
             },
-            uirevision: `lightcurve-view-${seriesConfig.mode}-${lightcurveDisplayMode}`,
+            uirevision: "lightcurve-view",
         };
+        if (previousXRange) {
+            layout.xaxis.range = previousXRange;
+            layout.xaxis.autorange = false;
+        }
+        if (previousYRange && previousSeriesMode === seriesConfig.mode) {
+            layout.yaxis.range = previousYRange;
+            layout.yaxis.autorange = false;
+        }
         const renderPromise = lightcurvePlot.data
-            ? Plotly.react(lightcurvePlot, traces, layout, { responsive: true, displayModeBar: false })
-            : Plotly.newPlot(lightcurvePlot, traces, layout, { responsive: true, displayModeBar: false });
+            ? Plotly.react(lightcurvePlot, traces, layout, { responsive: true, displayModeBar: true })
+            : Plotly.newPlot(lightcurvePlot, traces, layout, { responsive: true, displayModeBar: true });
         renderPromise.then(function () {
+            lightcurvePlot.__seriesMode = seriesConfig.mode;
             if (!lightcurvePlot.__lightcurveClickBound && typeof lightcurvePlot.on === "function") {
                 lightcurvePlot.on("plotly_click", handleLightcurveClick);
                 lightcurvePlot.__lightcurveClickBound = true;
@@ -1611,6 +1641,18 @@
             if (lastRunResult && lastRunResult.lightcurve && lastRunResult.lightcurve.available) {
                 renderLightcurve(lastRunResult.lightcurve);
             }
+        });
+    }
+
+    if (lightcurveResetZoomButton) {
+        lightcurveResetZoomButton.addEventListener("click", function () {
+            if (!lightcurvePlot || !lightcurvePlot.data) {
+                return;
+            }
+            Plotly.relayout(lightcurvePlot, {
+                "xaxis.autorange": true,
+                "yaxis.autorange": true,
+            });
         });
     }
 

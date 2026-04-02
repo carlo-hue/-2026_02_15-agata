@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import math
+from time import perf_counter
 
 from astroquery.gaia import Gaia
 from astroquery.mast import Catalogs
@@ -374,6 +375,7 @@ def _build_tpf_preview(target_info: dict, sector: int, nearby_sources: list[dict
 def run_tpf_pipeline(gaia_source_id: str, sector, masks: dict | None = None) -> dict:
     normalized_gaia_source_id = validate_gaia_source_id(gaia_source_id)
     normalized_sector = validate_sector(sector)
+    pipeline_started_at = perf_counter()
     LOGGER.info(
         "Starting TPF pipeline for gaia_source_id=%s sector=%s manual_masks=%s",
         normalized_gaia_source_id,
@@ -381,16 +383,49 @@ def run_tpf_pipeline(gaia_source_id: str, sector, masks: dict | None = None) -> 
         bool(masks),
     )
     try:
+        target_fetch_started_at = perf_counter()
         target_info = _fetch_gaia_dr3_target(normalized_gaia_source_id)
+        LOGGER.info(
+            "TPF timing | gaia_source_id=%s sector=%s step=fetch_target elapsed_s=%.3f",
+            normalized_gaia_source_id,
+            normalized_sector,
+            perf_counter() - target_fetch_started_at,
+        )
+
+        load_tpf_started_at = perf_counter()
         real_tpf = load_local_tpf(normalized_gaia_source_id, normalized_sector, settings.local_tpf_data_dir, include_frames=False)
+        LOGGER.info(
+            "TPF timing | gaia_source_id=%s sector=%s step=load_local_tpf elapsed_s=%.3f found=%s",
+            normalized_gaia_source_id,
+            normalized_sector,
+            perf_counter() - load_tpf_started_at,
+            bool(real_tpf),
+        )
         if real_tpf is not None:
             LOGGER.info("Using real local TPF for gaia_source_id=%s sector=%s", normalized_gaia_source_id, normalized_sector)
             raw_time = real_tpf.pop("_time_values", None)
             raw_flux_cube = real_tpf.pop("_flux_cube", None)
             tpf_wcs = real_tpf.pop("_wcs", None)
             tpf_payload = real_tpf
+            reference_mag_started_at = perf_counter()
             tpf_payload["metadata"] = _resolve_reference_magnitude(target_info, tpf_payload.get("metadata"))
+            LOGGER.info(
+                "TPF timing | gaia_source_id=%s sector=%s step=resolve_reference_magnitude elapsed_s=%.3f reference_band=%s reference_source=%s",
+                normalized_gaia_source_id,
+                normalized_sector,
+                perf_counter() - reference_mag_started_at,
+                tpf_payload["metadata"].get("reference_mag_band"),
+                tpf_payload["metadata"].get("reference_mag_source"),
+            )
+            overlay_started_at = perf_counter()
             tpf_payload["overlay"] = _build_real_tpf_overlay(target_info, tpf_payload, tpf_wcs)
+            LOGGER.info(
+                "TPF timing | gaia_source_id=%s sector=%s step=build_overlay elapsed_s=%.3f sources=%s",
+                normalized_gaia_source_id,
+                normalized_sector,
+                perf_counter() - overlay_started_at,
+                len(tpf_payload["overlay"].get("gaia_sources") or []),
+            )
             pipeline_mode = "real"
             tpf_payload["masks"] = _empty_masks_payload("Maschere non disponibili.")
             lightcurve = compute_lightcurve_stub(
@@ -400,13 +435,21 @@ def run_tpf_pipeline(gaia_source_id: str, sector, masks: dict | None = None) -> 
             )
             if raw_time is not None and raw_flux_cube is not None:
                 if masks is not None:
-                        masks_payload, target_mask, background_mask = normalize_manual_masks(masks, tuple(raw_flux_cube.shape[1:]))
-                        tpf_payload["masks"] = masks_payload
-                        lightcurve = compute_real_lightcurve(
-                            raw_time,
-                            raw_flux_cube,
-                            target_mask,
-                            background_mask,
+                    manual_masks_started_at = perf_counter()
+                    masks_payload, target_mask, background_mask = normalize_manual_masks(masks, tuple(raw_flux_cube.shape[1:]))
+                    tpf_payload["masks"] = masks_payload
+                    LOGGER.info(
+                        "TPF timing | gaia_source_id=%s sector=%s step=normalize_manual_masks elapsed_s=%.3f",
+                        normalized_gaia_source_id,
+                        normalized_sector,
+                        perf_counter() - manual_masks_started_at,
+                    )
+                    manual_lightcurve_started_at = perf_counter()
+                    lightcurve = compute_real_lightcurve(
+                        raw_time,
+                        raw_flux_cube,
+                        target_mask,
+                        background_mask,
                             gaia_source_id=normalized_gaia_source_id,
                             tpf_source=tpf_payload.get("source"),
                             tpf_metadata=tpf_payload.get("metadata"),
@@ -416,13 +459,28 @@ def run_tpf_pipeline(gaia_source_id: str, sector, masks: dict | None = None) -> 
                                 "background_threshold": None,
                                 "sigma_clipping": None,
                             },
-                            mode="real-manual-mask",
-                            message="Light curve aggiornata con maschere modificate manualmente.",
-                        )
+                        mode="real-manual-mask",
+                        message="Light curve aggiornata con maschere modificate manualmente.",
+                    )
+                    LOGGER.info(
+                        "TPF timing | gaia_source_id=%s sector=%s step=compute_real_lightcurve_manual elapsed_s=%.3f points=%s",
+                        normalized_gaia_source_id,
+                        normalized_sector,
+                        perf_counter() - manual_lightcurve_started_at,
+                        len(lightcurve.get("time") or []),
+                    )
                 else:
                     try:
+                        auto_masks_started_at = perf_counter()
                         masks_payload, target_mask, background_mask = build_auto_masks(raw_flux_cube)
                         tpf_payload["masks"] = masks_payload
+                        LOGGER.info(
+                            "TPF timing | gaia_source_id=%s sector=%s step=build_auto_masks elapsed_s=%.3f",
+                            normalized_gaia_source_id,
+                            normalized_sector,
+                            perf_counter() - auto_masks_started_at,
+                        )
+                        auto_lightcurve_started_at = perf_counter()
                         lightcurve = compute_real_lightcurve(
                             raw_time,
                             raw_flux_cube,
@@ -437,6 +495,13 @@ def run_tpf_pipeline(gaia_source_id: str, sector, masks: dict | None = None) -> 
                                 "background_threshold": f"median_grid <= background + {AUTO_BACKGROUND_THRESHOLD_SIGMA} * scatter",
                                 "sigma_clipping": None,
                             },
+                        )
+                        LOGGER.info(
+                            "TPF timing | gaia_source_id=%s sector=%s step=compute_real_lightcurve_auto elapsed_s=%.3f points=%s",
+                            normalized_gaia_source_id,
+                            normalized_sector,
+                            perf_counter() - auto_lightcurve_started_at,
+                            len(lightcurve.get("time") or []),
                         )
                     except Exception as err:
                         LOGGER.exception(
@@ -482,7 +547,21 @@ def run_tpf_pipeline(gaia_source_id: str, sector, masks: dict | None = None) -> 
             },
             "lightcurve": lightcurve,
         }
+        save_started_at = perf_counter()
         save_result = save_tpf_session_stub(save_payload)
+        LOGGER.info(
+            "TPF timing | gaia_source_id=%s sector=%s step=save_stub elapsed_s=%.3f",
+            normalized_gaia_source_id,
+            normalized_sector,
+            perf_counter() - save_started_at,
+        )
+        LOGGER.info(
+            "TPF timing | gaia_source_id=%s sector=%s step=run_tpf_pipeline_total elapsed_s=%.3f mode=%s",
+            normalized_gaia_source_id,
+            normalized_sector,
+            perf_counter() - pipeline_started_at,
+            pipeline_mode,
+        )
         return {
             "status": "ok",
             "message": "Pipeline TPF completata correttamente.",
