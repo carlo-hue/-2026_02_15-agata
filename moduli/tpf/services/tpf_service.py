@@ -548,13 +548,33 @@ def run_tpf_pipeline(gaia_source_id: str, sector, masks: dict | None = None) -> 
             "lightcurve": lightcurve,
         }
         save_started_at = perf_counter()
-        save_result = save_tpf_session_stub(save_payload)
-        LOGGER.info(
-            "TPF timing | gaia_source_id=%s sector=%s step=save_stub elapsed_s=%.3f",
-            normalized_gaia_source_id,
-            normalized_sector,
-            perf_counter() - save_started_at,
-        )
+        try:
+            save_result = save_tpf_session_stub(save_payload)
+            LOGGER.info(
+                "TPF timing | gaia_source_id=%s sector=%s step=save_db elapsed_s=%.3f",
+                normalized_gaia_source_id,
+                normalized_sector,
+                perf_counter() - save_started_at,
+            )
+        except Exception as err:
+            LOGGER.exception(
+                "TPF save failed inside run pipeline for gaia_source_id=%s sector=%s",
+                normalized_gaia_source_id,
+                normalized_sector,
+            )
+            save_result = {
+                "status": "error",
+                "message": str(err),
+                "mode": "database",
+                "saved": False,
+                "save_id": None,
+                "summary": {
+                    "gaia_source_id": normalized_gaia_source_id,
+                    "sector": normalized_sector,
+                    "tpf_available": bool(tpf_payload.get("available")),
+                    "lightcurve_available": bool(lightcurve.get("available")),
+                },
+            }
         LOGGER.info(
             "TPF timing | gaia_source_id=%s sector=%s step=run_tpf_pipeline_total elapsed_s=%.3f mode=%s",
             normalized_gaia_source_id,

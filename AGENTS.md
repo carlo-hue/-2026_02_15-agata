@@ -14,6 +14,9 @@ Lavorare sul repository AGATA senza assumere architetture o feature non presenti
   - `/tpf/health`
   - `/tpf/api/run`
   - `/tpf/api/frames`
+  - `/tpf/api/mast/local-sectors`
+  - `/tpf/api/mast/sectors`
+  - `/tpf/api/mast/download`
   - `/tpf/api/save`
 
 ## Regole pratiche
@@ -26,6 +29,10 @@ Lavorare sul repository AGATA senza assumere architetture o feature non presenti
   - `templates/...`
   - `static/js/...`
   - `static/css/...`
+- Per il modulo `tpf`, tieni le route sottili:
+  - parsing/validazione input
+  - chiamata ai service
+  - risposta JSON
 
 ## Convenzioni di codice osservate
 
@@ -35,6 +42,7 @@ Lavorare sul repository AGATA senza assumere architetture o feature non presenti
 - servizi Python separati da route nei moduli piu' recenti
 - logging semplice con `logging.getLogger(__name__)`
 - JSON API esplicite nei moduli recenti
+- per `tpf`, i dati locali stanno in `moduli/tpf/Dati_di_Prova`
 
 ## Vincoli per modifiche future
 
@@ -45,6 +53,11 @@ Lavorare sul repository AGATA senza assumere architetture o feature non presenti
   - assenza di DB reale finche' non richiesto
   - distinzione tra `run` leggero e caricamento frame on demand via `/tpf/api/frames`
   - UI basata su Plotly, JS vanilla e template Jinja
+  - workflow MAST/TESS incrementale:
+    - prima settori locali
+    - poi query remota opzionale
+    - `Riusa` per file locali
+    - `Scarica TPF` per file remoti
 - Se tocchi `moduli/tess_tce`, preserva il blueprint `/agata/tess-tce` e le API gia' esposte.
 - Se tocchi moduli protetti (`variable_stars`, `field_star_map`, `catalog`), controlla sempre `before_request`, `login_required` o decorator ruoli.
 - Non introdurre nuove dipendenze senza bisogno esplicito.
@@ -58,14 +71,23 @@ Lavorare sul repository AGATA senza assumere architetture o feature non presenti
   - somma target
   - background medio per pixel
   - sottrazione del background scalato al numero di pixel target
-- Il modulo ha overlay Gaia/target, slider frame, toggle Gaia on/off, scala colore fissa on/off e visualizzazione light curve linea/punti.
+- La conversione in magnitudine del `tpf` non usa zeropoint fisso:
+  - produce `mag_instr`
+  - prova ad ancorare con TESSMAG da header
+  - se manca, prova TIC/MAST
+  - se manca anche quello, usa fallback Gaia G esplicito
+- Il modulo ha overlay Gaia/target, slider frame, toggle Gaia on/off, scala colore fissa on/off, flux/mag e visualizzazione light curve linea/punti.
+- Il mode bar Plotly e' attivo solo sulla light curve; il TPF resta senza mode bar.
 - Le modifiche di layout recenti hanno spostato molte informazioni tecniche nella zona debug dopo `DA QUI IN POI INFO DI DEBUG`.
+- Il backend del `run` ha log timing per step principali; usali prima di ottimizzare performance.
+- I dati locali e i FITS di prova non vanno committati automaticamente insieme al codice.
 
 ## Attenzioni trasversali
 
 - Il repository non e' uniformato sugli import:
   - alcuni file usano import relativi
   - altri usano `agata.*`
+- Per il workflow TPF/MAST in locale e' preferibile usare il venv del repo con Python 3.12.x, non l'installazione 3.14 globale.
 - Documenta sempre se una modifica vale:
   - solo in locale
   - solo per un modulo

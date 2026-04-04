@@ -44,15 +44,21 @@ Il repository non espone una app factory Flask unica chiaramente definita a live
   - API e UI Jinja
 - `moduli/tpf`
   - endpoint `/tpf/`, `/tpf/health`, `/tpf/api/run`, `/tpf/api/frames`, `/tpf/api/save`
+  - endpoint MAST/TESS: `/tpf/api/mast/local-sectors`, `/tpf/api/mast/sectors`, `/tpf/api/mast/download`
   - runner locale Flask dedicato
   - lookup TPF reale da file FITS locale di test
   - fallback sintetico
+  - workflow MAST/TESS con reuse locale e download incrementale
   - overlay target/Gaia
   - maschere automatiche e manuali
   - light curve reale con sottrazione background
+  - conversione flux -> magnitudine senza zeropoint fisso
+  - ancoraggio magnitudine a TESSMAG/TIC oppure fallback Gaia G esplicito
+  - payload riproducibile con tempo BTJD/BJD, maschere e metadata del TPF
   - slider frame e sincronizzazione minima light curve -> frame TPF
   - caricamento ottimizzato dei frame visibili tramite route dedicata `/tpf/api/frames`
-  - toggle UI per Gaia on/off, scala colore fissa on/off, linea/punti sulla light curve
+  - toggle UI per Gaia on/off, scala colore fissa on/off, flux/mag e linea/punti sulla light curve
+  - mode bar Plotly attivo solo sulla light curve
   - save stub
 
 ## Stato attuale
@@ -63,6 +69,11 @@ Il repository non espone una app factory Flask unica chiaramente definita a live
 - I blueprint `moduli/tpf` e `moduli/tess_tce` usano pattern `create_blueprint()`.
 - `moduli/tpf` ha una pipeline locale reale basata su FITS di test, con editing pixel e ricalcolo light curve.
 - `moduli/tpf` non invia piu' l'intero cubo TPF al frontend in `run`: espone metadati frame e carica finestre di frame on demand.
+- `moduli/tpf` integra un workflow MAST/TESS separato dal viewer esistente:
+  - prima verifica i TPF gia' presenti localmente
+  - poi puo' interrogare MAST per altri settori
+  - usa `Riusa` per i TPF gia' locali e `Scarica TPF` per quelli remoti
+- `moduli/tpf` produce e salva anche magnitudini ancorate quando esiste un riferimento affidabile.
 - `variable_stars`, `field_star_map`, `catalog` ed `exoplanets` hanno codice applicativo reale e route concrete.
 
 ### Cosa manca o non e' esplicito in questo repo
@@ -71,14 +82,16 @@ Il repository non espone una app factory Flask unica chiaramente definita a live
 - Non e' presente un bootstrap centrale che registri tutti i blueprint in un solo punto.
 - Alcuni moduli usano import relativi, altri import assoluti `agata.*`: il packaging complessivo non e' uniforme.
 - `moduli/tpf` usa ancora dati FITS locali di prova e salvataggio stub; non c'e' persistenza reale.
-- `moduli/tpf` non implementa ancora workflow multi-settore, detrend, binning, flatten o magnitudini finali.
+- Il workflow MAST/TESS del `tpf` dipende da librerie scientifiche e servizi remoti; non e' garantito in ambienti Python incompatibili.
+- `moduli/tpf` non implementa ancora workflow multi-settore, detrend, binning o flatten.
 
 ## Prossimi step realistici
 
 - Rendere esplicita una app factory AGATA centrale, se esiste fuori repo o va definita qui.
 - Uniformare registrazione blueprint e packaging/import.
 - Per `moduli/tpf`:
-  - decidere la sorgente dati oltre ai FITS locali di prova
-  - definire un contratto di persistenza reale
-  - valutare un'opzione robusta per la stima del background se richiesta
+  - consolidare il workflow MAST/TESS come sorgente primaria oltre ai FITS locali di prova
+  - definire un contratto di persistenza reale oltre allo save stub
+  - decidere se e come esporre nel viewer tutte le serie salvate, non solo flux e magnitudine ancorata
+  - valutare caching o ottimizzazioni se i log timing mostrano colli di bottiglia nel `run`
 - Aggiornare la documentazione root quando cambia il comportamento pubblico del modulo `tpf`.

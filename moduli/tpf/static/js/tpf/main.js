@@ -901,11 +901,27 @@
             },
             uirevision: "lightcurve-view",
         };
+        if (seriesConfig.reverseYAxis) {
+            const finiteValues = corrected
+                .map((value) => Number(value))
+                .filter((value) => Number.isFinite(value));
+            if (finiteValues.length > 0) {
+                let minValue = Math.min(...finiteValues);
+                let maxValue = Math.max(...finiteValues);
+                if (minValue === maxValue) {
+                    const padding = Math.abs(minValue || 1) * 0.01;
+                    minValue -= padding;
+                    maxValue += padding;
+                }
+                layout.yaxis.range = [maxValue, minValue];
+                layout.yaxis.autorange = false;
+            }
+        }
         if (previousXRange) {
             layout.xaxis.range = previousXRange;
             layout.xaxis.autorange = false;
         }
-        if (previousYRange && previousSeriesMode === seriesConfig.mode) {
+        if (previousYRange && previousSeriesMode === seriesConfig.mode && !seriesConfig.reverseYAxis) {
             layout.yaxis.range = previousYRange;
             layout.yaxis.autorange = false;
         }
