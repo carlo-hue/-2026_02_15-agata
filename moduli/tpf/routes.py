@@ -21,7 +21,7 @@ def _mast_json_error(message: str, status_code: int = 400, **extra):
     return jsonify(payload), status_code
 
 
-def _build_page_context(args) -> dict:
+def _build_page_context(args, entrypoint: str = "editor") -> dict:
     gaia_source_id = str(args.get("gaia_source_id", "")).strip()
     sector_raw = str(args.get("sector", "")).strip()
     source_context = str(args.get("source_context", "")).strip()
@@ -31,6 +31,7 @@ def _build_page_context(args) -> dict:
         "gaia_source_id": gaia_source_id,
         "sector": sector_raw,
         "source_context": source_context,
+        "entrypoint": entrypoint,
     }
 
 
@@ -54,7 +55,27 @@ def create_blueprint() -> Blueprint:
 
     @bp.get("/")
     def index():
-        page_context = _build_page_context(request.args)
+        page_context = _build_page_context(request.args, entrypoint="editor")
+        return render_template(
+            "tpf/index.html",
+            module_title=settings.module_title,
+            scaffold_message=settings.placeholder_message,
+            page_context=page_context,
+            default_cutout_size=settings.default_cutout_size,
+            module_links={
+                "admin": _optional_url("admin.list_projects"),
+                "variable_stars": _optional_url("variable_stars.index"),
+                "exoplanets": _optional_url("exoplanets.index"),
+                "field_star_map": _optional_url("field_star_map.index"),
+                "galassie_nane": _optional_url("galassie_nane.index"),
+                "tess_tce": _optional_url("tess_tce.index"),
+                "tpf": url_for("tpf.index"),
+            },
+        )
+
+    @bp.get("/overview")
+    def overview():
+        page_context = _build_page_context(request.args, entrypoint="overview")
         return render_template(
             "tpf/index.html",
             module_title=settings.module_title,

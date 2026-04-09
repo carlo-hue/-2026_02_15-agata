@@ -1,11 +1,10 @@
 (function () {
     const appRoot = document.getElementById("tpfApp");
-    const form = document.getElementById("tpfForm");
     const gaiaSourceIdInput = document.getElementById("gaiaSourceIdInput");
-    const sectorInput = document.getElementById("sectorInput");
-    const runButton = document.getElementById("runButton");
     const saveButton = document.getElementById("saveButton");
     const gaiaOverlayToggleButton = document.getElementById("gaiaOverlayToggleButton");
+    const gaiaSizeToggleButton = document.getElementById("gaiaSizeToggleButton");
+    const gaiaSizeMaxMagInput = document.getElementById("gaiaSizeMaxMagInput");
     const fixedScaleToggleButton = document.getElementById("fixedScaleToggleButton");
     const targetModeButton = document.getElementById("targetModeButton");
     const backgroundModeButton = document.getElementById("backgroundModeButton");
@@ -49,6 +48,7 @@
     let editMode = "target";
     let editingEnabled = false;
     let gaiaOverlayEnabled = true;
+    let gaiaSizeByMagnitudeEnabled = false;
     let fixedColorScaleEnabled = false;
     let fixedColorScaleRange = null;
     let lightcurveSeriesMode = "flux";
@@ -63,8 +63,8 @@
     let mastHasRemoteResults = false;
 
     if (
-        !appRoot || !form || !gaiaSourceIdInput || !sectorInput || !runButton || !saveButton
-        || !gaiaOverlayToggleButton || !fixedScaleToggleButton || !targetModeButton || !backgroundModeButton || !recalcButton || !loadVisibleFramesButton
+        !appRoot || !gaiaSourceIdInput || !saveButton
+        || !gaiaOverlayToggleButton || !gaiaSizeToggleButton || !gaiaSizeMaxMagInput || !fixedScaleToggleButton || !targetModeButton || !backgroundModeButton || !recalcButton || !loadVisibleFramesButton
         || !frameSlider || !frameIndexLabel || !frameTimeLabel || !frameInfo || !loadFramesInfo
         || !statusBox || !saveStatusBox || !errorBox || !output || !returnPayloadBox || !targetInfo
         || !tpfInfo || !tpfHeaderMeta || !overlayInfo || !tpfDetailsInfo || !overlayDetailsInfo || !lightcurveDetailsInfo
@@ -90,6 +90,7 @@
         sector: appRoot.dataset.sector || "",
         source_context: appRoot.dataset.sourceContext || null,
         default_cutout_size: appRoot.dataset.defaultCutoutSize || "10",
+        overview_mode: appRoot.dataset.overviewMode === "1",
     };
 
     function setStatus(message, tone) {
@@ -334,8 +335,7 @@
             return;
         }
 
-        let minValue = Infinity;
-        let maxValue = -Infinity;
+        const allValues = [];
         for (const frame of tpfFrames) {
             if (!Array.isArray(frame)) {
                 continue;
@@ -349,16 +349,37 @@
                     if (!Number.isFinite(numeric)) {
                         continue;
                     }
-                    if (numeric < minValue) minValue = numeric;
-                    if (numeric > maxValue) maxValue = numeric;
+                    allValues.push(numeric);
                 }
             }
         }
 
-        if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
+        if (!allValues.length) {
             fixedColorScaleRange = null;
             return;
         }
+
+        allValues.sort((left, right) => left - right);
+        const percentile = (fraction) => {
+            const clamped = Math.min(1, Math.max(0, fraction));
+            const index = Math.round((allValues.length - 1) * clamped);
+            return allValues[index];
+        };
+
+        let minValue = percentile(0.02);
+        let maxValue = percentile(0.98);
+
+        if (!Number.isFinite(minValue) || !Number.isFinite(maxValue) || minValue >= maxValue) {
+            minValue = allValues[0];
+            maxValue = allValues[allValues.length - 1];
+        }
+
+        if (minValue === maxValue) {
+            const padding = Math.abs(minValue || 1) * 0.01;
+            minValue -= padding;
+            maxValue += padding;
+        }
+
         fixedColorScaleRange = { zmin: minValue, zmax: maxValue };
     }
 
@@ -404,8 +425,24 @@
         }
 
         if (!data || !Array.isArray(data.sectors) || !data.sectors.length) {
-            mastSectorsBox.className = "mast-sectors-box empty-state";
-            mastSectorsBox.innerHTML = "<div>Nessun settore TESS disponibile.</div>";
+            const gaiaId = String(gaiaSourceIdInput.value || "").trim();
+            if (gaiaId && !mastHasRemoteResults) {
+                mastSectorsBox.className = "mast-sectors-box";
+                mastSectorsBox.innerHTML = `
+                    <div class="mast-sector-row mast-sector-row-footer">
+                        <div class="mast-sector-meta">
+                            <div class="mast-sector-title">Nessun TPF locale trovato</div>
+                            <div class="mast-sector-subtitle">Puoi verificare se esistono altri TPF disponibili su MAST per questa sorgente.</div>
+                        </div>
+                        <div class="mast-sector-actions">
+                            <button type="button" class="button-secondary" data-mast-check-remote="1">Verifica altri TPF</button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                mastSectorsBox.className = "mast-sectors-box empty-state";
+                mastSectorsBox.innerHTML = "<div>Nessun settore TESS disponibile.</div>";
+            }
             return;
         }
 
@@ -692,10 +729,75 @@
         return shapes;
     }
 
+    function getMagnitudeScaleBounds(overlay) {
+        const allMagnitudes = [];
+        const targetFallbackGmag = Number(lastRunResult && lastRunResult.target ? lastRunResult.target.gmag : null);
+        if (overlay && overlay.target_position) {
+            const targetGmag = Number.isFinite(Number(overlay.target_position.gmag))
+                ? Number(overlay.target_position.gmag)
+                : targetFallbackGmag;
+            if (Number.isFinite(targetGmag)) {
+                allMagnitudes.push(targetGmag);
+            }
+        }
+        if (overlay && Array.isArray(overlay.gaia_sources)) {
+            for (const item of overlay.gaia_sources) {
+                const gmag = Number(item && item.gmag);
+                if (Number.isFinite(gmag)) {
+                    allMagnitudes.push(gmag);
+                }
+            }
+        }
+        if (!allMagnitudes.length) {
+            return null;
+        }
+        const brightMag = Math.min(...allMagnitudes);
+        const faintFieldMag = Math.max(...allMagnitudes);
+        return { brightMag, faintMag: faintFieldMag };
+    }
+
+    function syncGaiaMaxMagInput(overlay) {
+        if (!gaiaSizeMaxMagInput || !overlay || !Array.isArray(overlay.gaia_sources) || !overlay.gaia_sources.length) {
+            return;
+        }
+        const magnitudes = overlay.gaia_sources
+            .map((item) => Number(item && item.gmag))
+            .filter((value) => Number.isFinite(value));
+        if (!magnitudes.length) {
+            return;
+        }
+        if (String(gaiaSizeMaxMagInput.value || "").trim()) {
+            return;
+        }
+        gaiaSizeMaxMagInput.value = Math.max(...magnitudes).toFixed(2);
+    }
+
+    function getMagnitudeScaledMarkerSize(gmag, bounds, fallbackSize, minSize, maxSize) {
+        const numericGmag = Number(gmag);
+        if (!Number.isFinite(numericGmag) || !bounds) {
+            return fallbackSize;
+        }
+        const brightMag = Number(bounds.brightMag);
+        const faintMag = Number(bounds.faintMag);
+        if (!Number.isFinite(brightMag) || !Number.isFinite(faintMag) || faintMag <= brightMag) {
+            return fallbackSize;
+        }
+        const normalized = (numericGmag - brightMag) / (faintMag - brightMag);
+        const clamped = Math.max(0, Math.min(1, normalized));
+        return maxSize - (clamped * (maxSize - minSize));
+    }
+
     function buildTargetOverlayTrace(overlay) {
         if (!overlay || !overlay.target_position || overlay.target_position.x === undefined || overlay.target_position.y === undefined) {
             return null;
         }
+        const sizeBounds = gaiaSizeByMagnitudeEnabled ? getMagnitudeScaleBounds(overlay) : null;
+        const targetGmag = Number.isFinite(Number(overlay.target_position.gmag))
+            ? Number(overlay.target_position.gmag)
+            : Number(lastRunResult && lastRunResult.target ? lastRunResult.target.gmag : null);
+        const targetSize = gaiaSizeByMagnitudeEnabled
+            ? getMagnitudeScaledMarkerSize(targetGmag, sizeBounds, 14, 10, 22)
+            : 14;
         return {
             x: [overlay.target_position.x],
             y: [overlay.target_position.y],
@@ -703,12 +805,12 @@
             mode: "markers",
             name: "Target",
             marker: {
-                symbol: "x",
-                size: 14,
-                color: "#facc15",
+                symbol: "circle",
+                size: targetSize,
+                color: "rgba(250, 204, 21, 0.22)",
                 line: {
-                    color: "#facc15",
-                    width: 2,
+                    color: "#ef4444",
+                    width: 3,
                 },
             },
             hovertemplate: "Target<br>x=%{x:.2f}<br>y=%{y:.2f}<extra></extra>",
@@ -719,20 +821,34 @@
         if (!gaiaOverlayEnabled || !overlay || !Array.isArray(overlay.gaia_sources) || !overlay.gaia_sources.length) {
             return null;
         }
+        const maxVisibleMag = Number(gaiaSizeMaxMagInput.value);
+        const visibleSources = Number.isFinite(maxVisibleMag)
+            ? overlay.gaia_sources.filter((item) => {
+                const gmag = Number(item && item.gmag);
+                return !Number.isFinite(gmag) || gmag <= maxVisibleMag;
+            })
+            : overlay.gaia_sources;
+        if (!visibleSources.length) {
+            return null;
+        }
+        const sizeBounds = gaiaSizeByMagnitudeEnabled ? getMagnitudeScaleBounds(overlay) : null;
+        const markerSizes = gaiaSizeByMagnitudeEnabled
+            ? visibleSources.map((item) => getMagnitudeScaledMarkerSize(item && item.gmag, sizeBounds, 5, 3, 22))
+            : 5;
         return {
-            x: overlay.gaia_sources.map((item) => item.x),
-            y: overlay.gaia_sources.map((item) => item.y),
-            text: overlay.gaia_sources.map((item) => `source_id=${item.source_id}<br>Gmag=${item.gmag ?? "-"}`),
+            x: visibleSources.map((item) => item.x),
+            y: visibleSources.map((item) => item.y),
+            text: visibleSources.map((item) => `source_id=${item.source_id}<br>Gmag=${item.gmag ?? "-"}`),
             type: "scatter",
             mode: "markers",
             name: "Gaia",
             marker: {
                 symbol: "circle",
-                size: 5,
+                size: markerSizes,
                 color: "rgba(37, 99, 235, 0.78)",
                 line: {
                     color: "rgba(219, 234, 254, 0.75)",
-                    width: 0.8,
+                    width: 1.5,
                 },
             },
             hovertemplate: "%{text}<br>x=%{x:.2f}<br>y=%{y:.2f}<extra></extra>",
@@ -745,6 +861,14 @@
         gaiaOverlayToggleButton.title = gaiaOverlayEnabled
             ? "Nasconde le sorgenti Gaia per facilitare la selezione dei pixel."
             : "Mostra di nuovo le sorgenti Gaia sul TPF.";
+    }
+
+    function updateGaiaSizeToggleButton() {
+        gaiaSizeToggleButton.textContent = gaiaSizeByMagnitudeEnabled ? "Gaia size ON" : "Gaia size OFF";
+        gaiaSizeToggleButton.classList.toggle("is-off", !gaiaSizeByMagnitudeEnabled);
+        gaiaSizeToggleButton.title = gaiaSizeByMagnitudeEnabled
+            ? "Usa circoletti Gaia con dimensioni proporzionali alla magnitudine."
+            : "Usa circoletti Gaia di dimensione fissa.";
     }
 
     function renderTPF(grid, masks) {
@@ -956,12 +1080,19 @@
     function formatTpfHeaderMeta(result) {
         const input = result && result.input ? result.input : {};
         const target = result && result.target ? result.target : {};
+        const tpf = result && result.tpf ? result.tpf : {};
         const gaiaSourceId = target.gaia_source_id || input.gaia_source_id || "-";
         const sector = input.sector ?? "-";
-        const raDeg = target.ra_deg ?? "-";
-        const decDeg = target.dec_deg ?? "-";
-        const gmag = target.gmag ?? "-";
-        return `gaia_source_id=${gaiaSourceId} | sector=${sector} | ra=${raDeg} | dec=${decDeg} | gmag=${gmag}`;
+        const raDeg = Number.isFinite(Number(target.ra_deg)) ? Number(target.ra_deg).toFixed(2) : "-";
+        const decDeg = Number.isFinite(Number(target.dec_deg)) ? Number(target.dec_deg).toFixed(2) : "-";
+        const gmag = Number.isFinite(Number(target.gmag)) ? Number(target.gmag).toFixed(2) : "-";
+        const camera = tpf && tpf.metadata && tpf.metadata.camera !== undefined && tpf.metadata.camera !== null
+            ? tpf.metadata.camera
+            : "-";
+        const ccd = tpf && tpf.metadata && tpf.metadata.ccd !== undefined && tpf.metadata.ccd !== null
+            ? tpf.metadata.ccd
+            : "-";
+        return `gaia_id=${gaiaSourceId} | sect=${sector} | cam=${camera} | ccd=${ccd} | ra=${raDeg} | dec=${decDeg} | gmag=${gmag}`;
     }
 
     function formatMaskInfo(tpf) {
@@ -1109,6 +1240,7 @@
         maskInfo.textContent = formatMaskInfo(tpf);
         maskInfo.classList.toggle("warning", masksNeedRecalc());
         updateFrameControls(tpf);
+        syncGaiaMaxMagInput(tpf.overlay || null);
 
         const currentGrid = getCurrentFrameGrid(tpf);
         if (Array.isArray(currentGrid)) {
@@ -1343,10 +1475,6 @@
         if (gaiaSourceIdInput) {
             gaiaSourceIdInput.value = gaiaSourceId;
         }
-        if (sectorInput) {
-            sectorInput.value = sector;
-        }
-
         setError("");
         setStatus("Loading... esecuzione pipeline in corso.", "status-neutral");
         setSaveStatus("Nessun salvataggio eseguito.", "status-neutral");
@@ -1360,7 +1488,6 @@
         saveButton.disabled = true;
         updateEditingControls();
         resetFrameState();
-        setButtonBusy(runButton, "Loading...", true);
         clearPlots();
         resetSections();
         renderReturnPayloadPreview(null);
@@ -1390,7 +1517,6 @@
             renderReturnPayloadPreview(null);
             return false;
         } finally {
-            setButtonBusy(runButton, "Loading...", false);
         }
     }
 
@@ -1418,12 +1544,6 @@
                 setMastStatus(`TPF locali trovati per gaia_id=${data.gaia_id}: ${localCount}.`, "success");
             } else {
                 setMastStatus(`Nessun TPF locale trovato per gaia_id=${data.gaia_id}.`, "warning");
-                const shouldCheckRemote = window.confirm(
-                    "Non risultano TPF locali per questa sorgente. Vuoi verificare se esistono settori TESS disponibili su MAST?"
-                );
-                if (shouldCheckRemote) {
-                    await handleMastRemoteSectorSearch(findMastSectorsButton);
-                }
             }
         } catch (error) {
             lastMastSectorsResult = null;
@@ -1586,13 +1706,6 @@
         }
     }
 
-    form.addEventListener("submit", async function (event) {
-        event.preventDefault();
-        const gaiaSourceId = String(gaiaSourceIdInput.value || "").trim();
-        const sector = String(sectorInput.value || "").trim();
-        await startPipelineRun(gaiaSourceId, sector);
-    });
-
     recalcButton.addEventListener("click", async function () {
         if (!editingEnabled || !lastRunResult) {
             return;
@@ -1639,6 +1752,16 @@
         if (lastRunResult && lastRunResult.lightcurve && lastRunResult.lightcurve.available) {
             renderLightcurve(lastRunResult.lightcurve);
         }
+    });
+
+    gaiaSizeToggleButton.addEventListener("click", function () {
+        gaiaSizeByMagnitudeEnabled = !gaiaSizeByMagnitudeEnabled;
+        updateGaiaSizeToggleButton();
+        renderCurrentTpfState();
+    });
+
+    gaiaSizeMaxMagInput.addEventListener("input", function () {
+        renderCurrentTpfState();
     });
 
     if (fixedScaleToggleButton) {
@@ -1787,10 +1910,23 @@
 
     updateEditingControls();
     updateGaiaOverlayToggleButton();
+    updateGaiaSizeToggleButton();
     updateFixedScaleToggleButton();
     updateLightcurveSeriesToggleButton(null);
     updateLightcurveDisplayToggleButton();
-    setMastStatus('Usa il Gaia source id sopra, poi premi "Controlla TPF locali".', null);
+    setMastStatus(
+        pageContext.overview_mode
+            ? (
+                pageContext.gaia_source_id
+                    ? "Ricerca automatica dei TPF locali in corso..."
+                    : 'Inserisci un Gaia source id oppure apri questa pagina con ?gaia_source_id=... per vedere subito i TPF locali.'
+            )
+            : 'Usa il Gaia source id sopra, poi premi "Controlla TPF locali".',
+        null
+    );
     renderMastSectors(null);
     renderReturnPayloadPreview(null);
+    if (pageContext.overview_mode && pageContext.gaia_source_id) {
+        handleMastSectorSearch();
+    }
 })();

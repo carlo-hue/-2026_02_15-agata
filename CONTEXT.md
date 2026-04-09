@@ -45,6 +45,7 @@ Il repository non espone una app factory Flask unica chiaramente definita a live
 - `moduli/tpf`
   - endpoint `/tpf/`, `/tpf/health`, `/tpf/api/run`, `/tpf/api/frames`, `/tpf/api/save`
   - endpoint MAST/TESS: `/tpf/api/mast/local-sectors`, `/tpf/api/mast/sectors`, `/tpf/api/mast/download`
+  - endpoint UI overview: `/tpf/overview`
   - runner locale Flask dedicato
   - lookup TPF reale da file FITS locale di test
   - fallback sintetico
@@ -57,9 +58,12 @@ Il repository non espone una app factory Flask unica chiaramente definita a live
   - payload riproducibile con tempo BTJD/BJD, maschere e metadata del TPF
   - slider frame e sincronizzazione minima light curve -> frame TPF
   - caricamento ottimizzato dei frame visibili tramite route dedicata `/tpf/api/frames`
-  - toggle UI per Gaia on/off, scala colore fissa on/off, flux/mag e linea/punti sulla light curve
+  - toggle UI per Gaia on/off, dimensione simboli Gaia fissa/proporzionale alla magnitudine, scala colore fissa on/off, flux/mag e linea/punti sulla light curve
   - mode bar Plotly attivo solo sulla light curve
-  - save stub
+  - persistenza locale reale:
+    - sessione tecnica in `agata_tpf_sessions`
+    - promozione punti in `agata_star_photometry`
+    - aggiornamento minimo di `agata_star`
 
 ## Stato attuale
 
@@ -73,7 +77,12 @@ Il repository non espone una app factory Flask unica chiaramente definita a live
   - prima verifica i TPF gia' presenti localmente
   - poi puo' interrogare MAST per altri settori
   - usa `Riusa` per i TPF gia' locali e `Scarica TPF` per quelli remoti
+- `moduli/tpf` espone anche una pagina overview:
+  - `/tpf/overview`
+  - se chiamata con `gaia_source_id`, mostra direttamente i TPF locali e il passo opzionale verso MAST
+  - se chiamata senza `gaia_source_id`, parte dalla ricerca locale tramite input nella sezione `MAST / TESS`
 - `moduli/tpf` produce e salva anche magnitudini ancorate quando esiste un riferimento affidabile.
+- `moduli/tpf` salva realmente su DB locale, se `DATABASE_URL` e schema minimo sono presenti.
 - `variable_stars`, `field_star_map`, `catalog` ed `exoplanets` hanno codice applicativo reale e route concrete.
 
 ### Cosa manca o non e' esplicito in questo repo
@@ -81,7 +90,7 @@ Il repository non espone una app factory Flask unica chiaramente definita a live
 - Non c'e' una app Flask root unica chiaramente definita nel repository.
 - Non e' presente un bootstrap centrale che registri tutti i blueprint in un solo punto.
 - Alcuni moduli usano import relativi, altri import assoluti `agata.*`: il packaging complessivo non e' uniforme.
-- `moduli/tpf` usa ancora dati FITS locali di prova e salvataggio stub; non c'e' persistenza reale.
+- `moduli/tpf` usa ancora dati FITS locali di prova come sorgente principale locale, ma ora ha persistenza reale locale opzionale via MySQL.
 - Il workflow MAST/TESS del `tpf` dipende da librerie scientifiche e servizi remoti; non e' garantito in ambienti Python incompatibili.
 - `moduli/tpf` non implementa ancora workflow multi-settore, detrend, binning o flatten.
 
@@ -91,7 +100,7 @@ Il repository non espone una app factory Flask unica chiaramente definita a live
 - Uniformare registrazione blueprint e packaging/import.
 - Per `moduli/tpf`:
   - consolidare il workflow MAST/TESS come sorgente primaria oltre ai FITS locali di prova
-  - definire un contratto di persistenza reale oltre allo save stub
+  - decidere il contratto definitivo tra persistenza TPF locale e flussi legacy/admin che oggi usano `Cataloghi_esterni`
   - decidere se e come esporre nel viewer tutte le serie salvate, non solo flux e magnitudine ancorata
   - valutare caching o ottimizzazioni se i log timing mostrano colli di bottiglia nel `run`
 - Aggiornare la documentazione root quando cambia il comportamento pubblico del modulo `tpf`.

@@ -49,7 +49,74 @@
             data-sector="{{ page_context.sector }}"
             data-source-context="{{ page_context.source_context }}"
             data-default-cutout-size="{{ default_cutout_size }}"
+            data-overview-mode="{{ '1' if page_context.entrypoint == 'overview' else '0' }}"
         >
+            {% if page_context.entrypoint == 'overview' %}
+            <section class="panel panel-mast">
+                <h2>MAST / TESS</h2>
+                <div class="mast-toolbar">
+                    <div class="mast-cutout-field mast-gaia-field">
+                        <label for="gaiaSourceIdInput">gaia_source_id (DR3)</label>
+                        <input
+                            id="gaiaSourceIdInput"
+                            name="gaia_source_id"
+                            type="text"
+                            value="{{ page_context.gaia_source_id }}"
+                            placeholder="es. 1996211639964641280"
+                            autocomplete="off"
+                        >
+                    </div>
+                    <div class="mast-cutout-field">
+                        <label for="mastCutoutSizeInput">cutout_size</label>
+                        <input id="mastCutoutSizeInput" type="number" min="1" step="1" value="{{ default_cutout_size }}">
+                    </div>
+                    {% if not (page_context.entrypoint == 'overview' and page_context.gaia_source_id) %}
+                    <button type="button" id="findMastSectorsButton" class="button-secondary">Controlla TPF locali</button>
+                    {% endif %}
+                    <button type="button" id="saveButton" class="button-secondary" disabled>Salva sessione</button>
+                    {% if not (page_context.entrypoint == 'overview' and page_context.gaia_source_id) %}
+                    <div id="mastStatusInfo" class="detail-block detail-text">Usa il Gaia source id sopra, poi premi "Controlla TPF locali".</div>
+                    {% else %}
+                    <div id="mastStatusInfo" class="detail-block detail-text hidden"></div>
+                    {% endif %}
+                </div>
+                <div id="mastSectorsBox" class="mast-sectors-box empty-state">Nessun settore TESS caricato.</div>
+            </section>
+            {% endif %}
+
+            {% if page_context.entrypoint != 'overview' %}
+            <section class="panel panel-mast">
+                <h2>MAST / TESS</h2>
+                <div class="mast-toolbar">
+                    <div class="mast-cutout-field mast-gaia-field">
+                        <label for="gaiaSourceIdInput">gaia_source_id (DR3)</label>
+                        <input
+                            id="gaiaSourceIdInput"
+                            name="gaia_source_id"
+                            type="text"
+                            value="{{ page_context.gaia_source_id }}"
+                            placeholder="es. 1996211639964641280"
+                            autocomplete="off"
+                        >
+                    </div>
+                    <div class="mast-cutout-field">
+                        <label for="mastCutoutSizeInput">cutout_size</label>
+                        <input id="mastCutoutSizeInput" type="number" min="1" step="1" value="{{ default_cutout_size }}">
+                    </div>
+                    {% if not (page_context.entrypoint == 'overview' and page_context.gaia_source_id) %}
+                    <button type="button" id="findMastSectorsButton" class="button-secondary">Controlla TPF locali</button>
+                    {% endif %}
+                    <button type="button" id="saveButton" class="button-secondary" disabled>Salva sessione</button>
+                    {% if not (page_context.entrypoint == 'overview' and page_context.gaia_source_id) %}
+                    <div id="mastStatusInfo" class="detail-block detail-text">Usa il Gaia source id sopra, poi premi "Controlla TPF locali".</div>
+                    {% else %}
+                    <div id="mastStatusInfo" class="detail-block detail-text hidden"></div>
+                    {% endif %}
+                </div>
+                <div id="mastSectorsBox" class="mast-sectors-box empty-state">Nessun settore TESS caricato.</div>
+            </section>
+            {% endif %}
+
             <section class="grid-layout">
                 <section class="panel">
                     <h2>TPF</h2>
@@ -57,6 +124,11 @@
                     <div id="tpfPlot" class="plot-box"></div>
                     <div class="edit-toolbar">
                         <button type="button" id="gaiaOverlayToggleButton" class="overlay-toggle-button">Gaia overlay ON</button>
+                        <button type="button" id="gaiaSizeToggleButton" class="overlay-toggle-button">Gaia size OFF</button>
+                        <label class="gaia-mag-limit-field" for="gaiaSizeMaxMagInput">
+                            <span>max mag</span>
+                            <input type="number" id="gaiaSizeMaxMagInput" step="0.1" placeholder="auto">
+                        </label>
                         <button type="button" id="targetModeButton" class="edit-mode-button is-active" disabled>Target</button>
                         <button type="button" id="backgroundModeButton" class="edit-mode-button" disabled>Background</button>
                         <button type="button" id="recalcButton" class="button-secondary" disabled>Ricalcola light curve</button>
@@ -91,46 +163,6 @@
                 </section>
             </section>
             <div id="targetInfo" class="hidden"></div>
-
-            <section class="panel panel-input">
-                <h2>Input</h2>
-                <form id="tpfForm" class="tpf-form" novalidate>
-                    <label for="gaiaSourceIdInput">gaia_source_id (DR3)</label>
-                    <div class="input-row input-row-primary">
-                        <input
-                            id="gaiaSourceIdInput"
-                            name="gaia_source_id"
-                            type="text"
-                            value="{{ page_context.gaia_source_id }}"
-                            placeholder="es. 1996211639964641280"
-                            autocomplete="off"
-                        >
-                        <input
-                            id="sectorInput"
-                            name="sector"
-                            type="text"
-                            value="{{ page_context.sector }}"
-                            placeholder="sector es. 57"
-                            autocomplete="off"
-                        >
-                        <button type="submit" id="runButton">Run</button>
-                        <button type="button" id="saveButton" class="button-secondary" disabled>Salva sessione</button>
-                    </div>
-                </form>
-            </section>
-
-            <section class="panel panel-mast">
-                <h2>MAST / TESS</h2>
-                <div class="mast-toolbar">
-                    <div class="mast-cutout-field">
-                        <label for="mastCutoutSizeInput">cutout_size</label>
-                        <input id="mastCutoutSizeInput" type="number" min="1" step="1" value="{{ default_cutout_size }}">
-                    </div>
-                    <button type="button" id="findMastSectorsButton" class="button-secondary">Controlla TPF locali</button>
-                    <div id="mastStatusInfo" class="detail-block detail-text">Usa il Gaia source id sopra, poi premi "Controlla TPF locali".</div>
-                </div>
-                <div id="mastSectorsBox" class="mast-sectors-box empty-state">Nessun settore TESS caricato.</div>
-            </section>
 
             <section class="panel">
                 <h2 class="panel-title-centered">DA QUI IN POI INFO DI DEBUG</h2>
@@ -224,7 +256,7 @@
 }</pre>
             </section>
 
-            <section class="panel">
+            <section class="panel hidden">
                 <h2>Output JSON Tecnico</h2>
                 <pre id="output" class="output-box">{}</pre>
             </section>

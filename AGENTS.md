@@ -11,6 +11,7 @@ Lavorare sul repository AGATA senza assumere architetture o feature non presenti
 - I moduli sotto [moduli/](C:/Users/CarloMarino/OneDrive%20-%20camarino59/OneDrive/CODICE/2026_02_15-agata/moduli) usano pattern `create_blueprint()`.
 - `moduli/tpf` espone oggi:
   - `/tpf/`
+  - `/tpf/overview`
   - `/tpf/health`
   - `/tpf/api/run`
   - `/tpf/api/frames`
@@ -33,6 +34,9 @@ Lavorare sul repository AGATA senza assumere architetture o feature non presenti
   - parsing/validazione input
   - chiamata ai service
   - risposta JSON
+- Per `tpf`, la pagina `/tpf/overview` e' un entrypoint UI:
+  - usa gli endpoint gia' esistenti
+  - non sostituisce gli endpoint tecnici del modulo
 
 ## Convenzioni di codice osservate
 
@@ -50,7 +54,6 @@ Lavorare sul repository AGATA senza assumere architetture o feature non presenti
 - Se tocchi `moduli/tpf`, preserva:
   - endpoint esistenti
   - fallback sintetico
-  - assenza di DB reale finche' non richiesto
   - distinzione tra `run` leggero e caricamento frame on demand via `/tpf/api/frames`
   - UI basata su Plotly, JS vanilla e template Jinja
   - workflow MAST/TESS incrementale:
@@ -58,6 +61,9 @@ Lavorare sul repository AGATA senza assumere architetture o feature non presenti
     - poi query remota opzionale
     - `Riusa` per file locali
     - `Scarica TPF` per file remoti
+  - overview UI separata dal viewer:
+    - `/tpf/overview` per cercare/riusare/scaricare TPF
+    - `/tpf/` per viewer/editor TPF
 - Se tocchi `moduli/tess_tce`, preserva il blueprint `/agata/tess-tce` e le API gia' esposte.
 - Se tocchi moduli protetti (`variable_stars`, `field_star_map`, `catalog`), controlla sempre `before_request`, `login_required` o decorator ruoli.
 - Non introdurre nuove dipendenze senza bisogno esplicito.
@@ -76,10 +82,15 @@ Lavorare sul repository AGATA senza assumere architetture o feature non presenti
   - prova ad ancorare con TESSMAG da header
   - se manca, prova TIC/MAST
   - se manca anche quello, usa fallback Gaia G esplicito
-- Il modulo ha overlay Gaia/target, slider frame, toggle Gaia on/off, scala colore fissa on/off, flux/mag e visualizzazione light curve linea/punti.
+- Il modulo ha overlay Gaia/target, slider frame, toggle Gaia on/off, dimensione simboli Gaia fissa/proporzionale alla magnitudine, scala colore fissa on/off, flux/mag e visualizzazione light curve linea/punti.
 - Il mode bar Plotly e' attivo solo sulla light curve; il TPF resta senza mode bar.
 - Le modifiche di layout recenti hanno spostato molte informazioni tecniche nella zona debug dopo `DA QUI IN POI INFO DI DEBUG`.
 - Il backend del `run` ha log timing per step principali; usali prima di ottimizzare performance.
+- Il save del `tpf` non e' piu' solo stub:
+  - salva sessione tecnica in `agata_tpf_sessions`
+  - promuove punti in `agata_star_photometry`
+  - aggiorna `agata_star` in modo minimale
+  - i flussi legacy/admin del repo restano comunque basati su `Cataloghi_esterni`
 - I dati locali e i FITS di prova non vanno committati automaticamente insieme al codice.
 
 ## Attenzioni trasversali

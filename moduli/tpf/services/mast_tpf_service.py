@@ -61,6 +61,9 @@ def _load_legacy_util_module():
     except ModuleNotFoundError as err:
         LOGGER.warning("Legacy util import failed because dependency is missing: %s", err)
         raise MastTpfServiceError(f"Legacy util non importabile: {err}") from err
+    except Exception as err:
+        LOGGER.warning("Legacy util import failed, falling back to internal resolvers: %s", err)
+        raise MastTpfServiceError(f"Legacy util non importabile: {err}") from err
     return module
 
 

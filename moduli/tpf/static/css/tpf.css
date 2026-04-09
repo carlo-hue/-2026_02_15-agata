@@ -166,7 +166,7 @@ h2 {
 
 .mast-toolbar {
     display: grid;
-    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-columns: auto auto auto auto minmax(0, 1fr);
     gap: 0.75rem;
     align-items: end;
     margin-bottom: 0.85rem;
@@ -184,11 +184,15 @@ h2 {
 }
 
 .mast-cutout-field input {
-    width: 110px;
+    width: 7ch;
     padding: 0.55rem 0.7rem;
     border: 1px solid var(--tpf-border);
     border-radius: 10px;
     font-size: 0.92rem;
+}
+
+.mast-gaia-field input {
+    width: 25ch;
 }
 
 .mast-sectors-box {
@@ -386,8 +390,28 @@ h2 {
 .edit-toolbar {
     display: flex;
     flex-wrap: wrap;
+    align-items: end;
     gap: 0.6rem;
     margin: 0.8rem 0 0.6rem;
+}
+
+.gaia-mag-limit-field {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.gaia-mag-limit-field span {
+    font-size: 0.72rem;
+    color: var(--tpf-muted);
+    font-weight: 600;
+}
+
+.gaia-mag-limit-field input {
+    width: 8ch;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid var(--tpf-border);
+    border-radius: 10px;
+    font-size: 0.84rem;
 }
 
 .fixed-scale-button {
@@ -460,6 +484,10 @@ h2 {
 .tpf-header-meta {
     margin: 0 0 0.7rem;
     color: var(--tpf-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.82rem;
 }
 
 .detail-block {
