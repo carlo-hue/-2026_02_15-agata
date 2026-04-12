@@ -142,6 +142,35 @@ def _build_frames_metadata_payload(flux_cube: np.ndarray) -> dict:
     }
 
 
+def _build_pixel_world_payload(tpf_wcs, shape: list[int]) -> dict | None:
+    if tpf_wcs is None:
+        return None
+    rows = int(shape[0]) if shape else 0
+    cols = int(shape[1]) if len(shape) > 1 else 0
+    if rows <= 0 or cols <= 0:
+        return None
+    try:
+        ra_grid = []
+        dec_grid = []
+        for row in range(rows):
+            row_ra = []
+            row_dec = []
+            for col in range(cols):
+                ra_deg, dec_deg = tpf_wcs.all_pix2world([[float(col), float(row)]], 0)[0]
+                row_ra.append(round(float(ra_deg), 5))
+                row_dec.append(round(float(dec_deg), 5))
+            ra_grid.append(row_ra)
+            dec_grid.append(row_dec)
+        return {
+            "available": True,
+            "ra_deg": ra_grid,
+            "dec_deg": dec_grid,
+        }
+    except Exception:
+        LOGGER.exception("Unable to build pixel world payload from TPF WCS")
+        return None
+
+
 def _build_serialized_frame_window(flux_cube: np.ndarray, time_values: np.ndarray, frame_start: int, frame_end: int) -> dict:
     cube = np.asarray(flux_cube, dtype=float)
     times = np.asarray(time_values, dtype=float)
@@ -217,6 +246,7 @@ def load_local_tpf(gaia_source_id: str, sector: int, data_dir: str, *, include_f
             time_system, time_system_key = _first_header_value(headers, ["TIMESYS"])
             time_unit, time_unit_key = _first_header_value(headers, ["TIMEUNIT"])
             shape = [len(flux_grid), len(flux_grid[0]) if flux_grid else 0]
+            pixel_world = _build_pixel_world_payload(tpf_wcs, shape)
             cadence_count = int(flux_cube.shape[0]) if flux_cube.ndim == 3 else 1
             source_type, message = _detect_source_info(file_path)
             bjd_ref = None
@@ -258,6 +288,7 @@ def load_local_tpf(gaia_source_id: str, sector: int, data_dir: str, *, include_f
                     "bjd_ref_f": float(bjd_ref_f) if bjd_ref_f is not None else None,
                     "bjd_ref_f_key": bjd_ref_f_key,
                     "bjd_ref": bjd_ref,
+                    "pixel_world": pixel_world,
                 },
                 "_time_values": time_values,
                 "_flux_cube": flux_cube,

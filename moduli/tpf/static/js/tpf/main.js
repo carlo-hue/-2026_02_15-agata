@@ -6,6 +6,7 @@
     const gaiaSizeToggleButton = document.getElementById("gaiaSizeToggleButton");
     const gaiaSizeMaxMagInput = document.getElementById("gaiaSizeMaxMagInput");
     const fixedScaleToggleButton = document.getElementById("fixedScaleToggleButton");
+    const pixelInfoToggleButton = document.getElementById("pixelInfoToggleButton");
     const targetModeButton = document.getElementById("targetModeButton");
     const backgroundModeButton = document.getElementById("backgroundModeButton");
     const recalcButton = document.getElementById("recalcButton");
@@ -50,6 +51,7 @@
     let gaiaOverlayEnabled = true;
     let gaiaSizeByMagnitudeEnabled = false;
     let fixedColorScaleEnabled = false;
+    let pixelInfoEnabled = false;
     let fixedColorScaleRange = null;
     let lightcurveSeriesMode = "flux";
     let lightcurveDisplayMode = "lines";
@@ -64,7 +66,7 @@
 
     if (
         !appRoot || !gaiaSourceIdInput || !saveButton
-        || !gaiaOverlayToggleButton || !gaiaSizeToggleButton || !gaiaSizeMaxMagInput || !fixedScaleToggleButton || !targetModeButton || !backgroundModeButton || !recalcButton || !loadVisibleFramesButton
+        || !gaiaOverlayToggleButton || !gaiaSizeToggleButton || !gaiaSizeMaxMagInput || !fixedScaleToggleButton || !pixelInfoToggleButton || !targetModeButton || !backgroundModeButton || !recalcButton || !loadVisibleFramesButton
         || !frameSlider || !frameIndexLabel || !frameTimeLabel || !frameInfo || !loadFramesInfo
         || !statusBox || !saveStatusBox || !errorBox || !output || !returnPayloadBox || !targetInfo
         || !tpfInfo || !tpfHeaderMeta || !overlayInfo || !tpfDetailsInfo || !overlayDetailsInfo || !lightcurveDetailsInfo
@@ -640,7 +642,7 @@
         frameInfo.textContent = `Frame reale corrente: ${currentPosition}/${totalCount} | Time=${currentTime} | finestra caricata=${windowBounds ? `${windowBounds.start + 1}-${windowBounds.end + 1}` : "-"} | ${frames.message || "Clicca un punto della light curve per vedere il frame corrispondente."}`;
     }
     function handleTpfPlotClick(eventData) {
-        if (!editingEnabled || !lastRunResult || !lastRunResult.tpf || lastRunResult.tpf.mode !== "real") {
+        if (!lastRunResult || !lastRunResult.tpf || lastRunResult.tpf.mode !== "real") {
             return;
         }
         const point = eventData && eventData.points && eventData.points[0] ? eventData.points[0] : null;
@@ -653,6 +655,24 @@
 
         const row = Math.round(point.y);
         const col = Math.round(point.x);
+        if (pixelInfoEnabled) {
+            const currentTpf = buildCurrentTpfView();
+            const currentGrid = getCurrentFrameGrid(currentTpf);
+            const fluxValue = Array.isArray(currentGrid) && Array.isArray(currentGrid[row]) ? Number(currentGrid[row][col]) : null;
+            const pixelWorld = currentTpf && currentTpf.metadata ? currentTpf.metadata.pixel_world : null;
+            const raDeg = pixelWorld && Array.isArray(pixelWorld.ra_deg) && Array.isArray(pixelWorld.ra_deg[row]) ? Number(pixelWorld.ra_deg[row][col]) : null;
+            const decDeg = pixelWorld && Array.isArray(pixelWorld.dec_deg) && Array.isArray(pixelWorld.dec_deg[row]) ? Number(pixelWorld.dec_deg[row][col]) : null;
+            editInfo.textContent = [
+                `Info pixel: x=${col + 1}, y=${row + 1}`,
+                Number.isFinite(fluxValue) ? `flux=${fluxValue.toFixed(3)}` : "flux=-",
+                Number.isFinite(raDeg) ? `ra_ctr_pxl=${raDeg.toFixed(5)}` : "ra_ctr_pxl=-",
+                Number.isFinite(decDeg) ? `dec_ctr_pxl=${decDeg.toFixed(5)}` : "dec_ctr_pxl=-",
+            ].join(" | ");
+            return;
+        }
+        if (!editingEnabled) {
+            return;
+        }
         if (!targetMask[row] || targetMask[row][col] === undefined || !backgroundMask[row] || backgroundMask[row][col] === undefined) {
             return;
         }
@@ -798,6 +818,15 @@
         const targetSize = gaiaSizeByMagnitudeEnabled
             ? getMagnitudeScaledMarkerSize(targetGmag, sizeBounds, 14, 10, 22)
             : 14;
+        const targetHoverText = formatGaiaOverlayHoverText({
+            source_id: (lastRunResult && lastRunResult.target && lastRunResult.target.gaia_source_id) || "-",
+            gmag: targetGmag,
+            ra_deg: lastRunResult && lastRunResult.target ? lastRunResult.target.ra_deg : null,
+            dec_deg: lastRunResult && lastRunResult.target ? lastRunResult.target.dec_deg : null,
+            dist_arcsec: 0,
+            variable_type: null,
+            variable_catalogs: [],
+        });
         return {
             x: [overlay.target_position.x],
             y: [overlay.target_position.y],
@@ -813,13 +842,38 @@
                     width: 3,
                 },
             },
-            hovertemplate: "Target<br>x=%{x:.2f}<br>y=%{y:.2f}<extra></extra>",
+            text: [targetHoverText],
+            hovertemplate: "%{text}<br>x=%{x:.2f}<br>y=%{y:.2f}<extra></extra>",
         };
     }
 
-    function buildGaiaOverlayTrace(overlay) {
+    function formatGaiaOverlayHoverText(item) {
+        const ra = Number(item && item.ra_deg);
+        const dec = Number(item && item.dec_deg);
+        const distArcsec = Number(item && item.dist_arcsec);
+        const parts = [`source_id=${item.source_id}`, `Gmag=${item.gmag ?? "-"}`];
+        if (Number.isFinite(ra)) {
+            parts.push(`ra=${ra.toFixed(5)}`);
+        }
+        if (Number.isFinite(dec)) {
+            parts.push(`dec=${dec.toFixed(5)}`);
+        }
+        if (Number.isFinite(distArcsec)) {
+            parts.push(`dist_tgt=${distArcsec.toFixed(3)} arcsec`);
+            parts.push(`dist_tgt=${(distArcsec / 60.0).toFixed(3)} arcmin`);
+        }
+        if (item && item.variable_type) {
+            parts.push(`VarType=${item.variable_type}`);
+        }
+        if (item && Array.isArray(item.variable_catalogs) && item.variable_catalogs.length) {
+            parts.push(`Catalogs=${item.variable_catalogs.join(", ")}`);
+        }
+        return parts.join("<br>");
+    }
+
+    function buildGaiaOverlayTraces(overlay) {
         if (!gaiaOverlayEnabled || !overlay || !Array.isArray(overlay.gaia_sources) || !overlay.gaia_sources.length) {
-            return null;
+            return [];
         }
         const maxVisibleMag = Number(gaiaSizeMaxMagInput.value);
         const visibleSources = Number.isFinite(maxVisibleMag)
@@ -829,30 +883,61 @@
             })
             : overlay.gaia_sources;
         if (!visibleSources.length) {
-            return null;
+            return [];
         }
         const sizeBounds = gaiaSizeByMagnitudeEnabled ? getMagnitudeScaleBounds(overlay) : null;
-        const markerSizes = gaiaSizeByMagnitudeEnabled
-            ? visibleSources.map((item) => getMagnitudeScaledMarkerSize(item && item.gmag, sizeBounds, 5, 3, 22))
-            : 5;
-        return {
-            x: visibleSources.map((item) => item.x),
-            y: visibleSources.map((item) => item.y),
-            text: visibleSources.map((item) => `source_id=${item.source_id}<br>Gmag=${item.gmag ?? "-"}`),
-            type: "scatter",
-            mode: "markers",
-            name: "Gaia",
-            marker: {
-                symbol: "circle",
-                size: markerSizes,
-                color: "rgba(37, 99, 235, 0.78)",
-                line: {
-                    color: "rgba(219, 234, 254, 0.75)",
-                    width: 1.5,
+        const fixedSize = 5;
+        const normalSources = visibleSources.filter((item) => !(item && item.is_variable));
+        const variableSources = visibleSources.filter((item) => !!(item && item.is_variable));
+        const traces = [];
+
+        function buildTrace(items, name, color, lineColor) {
+            if (!items.length) {
+                return null;
+            }
+            const markerSizes = gaiaSizeByMagnitudeEnabled
+                ? items.map((item) => getMagnitudeScaledMarkerSize(item && item.gmag, sizeBounds, fixedSize, 3, 22))
+                : fixedSize;
+            return {
+                x: items.map((item) => item.x),
+                y: items.map((item) => item.y),
+                text: items.map((item) => formatGaiaOverlayHoverText(item)),
+                type: "scatter",
+                mode: "markers",
+                name: name,
+                marker: {
+                    symbol: "circle",
+                    size: markerSizes,
+                    color: color,
+                    line: {
+                        color: lineColor,
+                        width: 1.8,
+                    },
                 },
-            },
-            hovertemplate: "%{text}<br>x=%{x:.2f}<br>y=%{y:.2f}<extra></extra>",
-        };
+                hovertemplate: "%{text}<br>x=%{x:.2f}<br>y=%{y:.2f}<extra></extra>",
+            };
+        }
+
+        const normalTrace = buildTrace(
+            normalSources,
+            "Gaia",
+            "rgba(37, 99, 235, 0.78)",
+            "rgba(219, 234, 254, 0.85)",
+        );
+        const variableTrace = buildTrace(
+            variableSources,
+            "Gaia variabile",
+            "rgba(239, 68, 68, 0.82)",
+            "rgba(254, 226, 226, 0.95)",
+        );
+
+        if (normalTrace) {
+            traces.push(normalTrace);
+        }
+        if (variableTrace) {
+            traces.push(variableTrace);
+        }
+        return traces;
     }
 
     function updateGaiaOverlayToggleButton() {
@@ -871,7 +956,17 @@
             : "Usa circoletti Gaia di dimensione fissa.";
     }
 
+    function updatePixelInfoToggleButton() {
+        pixelInfoToggleButton.textContent = pixelInfoEnabled ? "Info pixel ON" : "Info pixel OFF";
+        pixelInfoToggleButton.classList.toggle("is-off", !pixelInfoEnabled);
+        pixelInfoToggleButton.title = pixelInfoEnabled
+            ? "Modalita' Info pixel attiva: clicca un pixel del TPF per vedere flux, RA e Dec."
+            : "Attiva la modalita' Info pixel per vedere flux, RA e Dec al click.";
+    }
+
     function renderTPF(grid, masks) {
+        const rowCount = Array.isArray(grid) ? grid.length : 0;
+        const colCount = rowCount && Array.isArray(grid[0]) ? grid[0].length : 0;
         const traces = [{
             z: grid,
             type: "heatmap",
@@ -885,11 +980,11 @@
         const shapes = [];
         const currentTpf = buildCurrentTpfView();
         const overlay = currentTpf && currentTpf.overlay ? currentTpf.overlay : null;
-        const gaiaTrace = buildGaiaOverlayTrace(overlay);
+        const gaiaTraces = buildGaiaOverlayTraces(overlay);
         const targetTrace = buildTargetOverlayTrace(overlay);
 
-        if (gaiaTrace) {
-            traces.push(gaiaTrace);
+        if (Array.isArray(gaiaTraces) && gaiaTraces.length) {
+            traces.push(...gaiaTraces);
         }
         if (targetTrace) {
             traces.push(targetTrace);
@@ -937,9 +1032,35 @@
         const layout = {
             title: getFrameCount() > 0 ? `TPF Flux Grid | frame ${clampFrameIndex(currentFrameIndex) + 1}` : "TPF Flux Grid",
             margin: { t: 40, r: 20, b: 40, l: 40 },
-            xaxis: { title: "Pixel X", constrain: "domain" },
-            yaxis: { title: "Pixel Y", autorange: "reversed", scaleanchor: "x", scaleratio: 1 },
-            legend: { orientation: "h" },
+            xaxis: {
+                title: "Pixel X",
+                constrain: "domain",
+                range: [-0.5, Math.max(0.5, colCount - 0.5)],
+                autorange: false,
+                fixedrange: true,
+                tickmode: "array",
+                tickvals: Array.from({ length: colCount }, (_, index) => index),
+                ticktext: Array.from({ length: colCount }, (_, index) => String(index + 1)),
+            },
+            yaxis: {
+                title: "Pixel Y",
+                range: [-0.5, Math.max(0.5, rowCount - 0.5)],
+                autorange: false,
+                fixedrange: true,
+                constrain: "domain",
+                scaleanchor: "x",
+                scaleratio: 1,
+                tickmode: "array",
+                tickvals: Array.from({ length: rowCount }, (_, index) => index),
+                ticktext: Array.from({ length: rowCount }, (_, index) => String(index + 1)),
+            },
+            legend: {
+                orientation: "h",
+                x: 0,
+                xanchor: "left",
+                y: -0.08,
+                yanchor: "top",
+            },
             shapes,
             uirevision: "tpf-frame-view",
         };
@@ -1117,9 +1238,11 @@
         if (tpf.overlay.message) parts.push(tpf.overlay.message);
         if (tpf.overlay.target_position && tpf.overlay.target_position.source) parts.push(`target_source=${tpf.overlay.target_position.source}`);
         if (Array.isArray(tpf.overlay.gaia_sources)) parts.push(`gaia_sources=${tpf.overlay.gaia_sources.length}`);
+        if (Number.isFinite(Number(tpf.overlay.variable_sources_count))) parts.push(`gaia_variable=${tpf.overlay.variable_sources_count}`);
         parts.push(`gaia_overlay=${gaiaOverlayEnabled ? "on" : "off"}`);
         parts.push("target=giallo");
         parts.push("gaia=blu");
+        parts.push("variabili=rosso");
         return parts.join(" | ");
     }
 
@@ -1141,7 +1264,9 @@
         targetModeButton.classList.toggle("is-active", editMode === "target");
         backgroundModeButton.classList.toggle("is-active", editMode === "background");
         if (editingEnabled) {
-            editInfo.textContent = `Modalita' editing attiva: ${editMode}. Clicca un pixel del TPF per modificarlo e poi premi "Ricalcola light curve".`;
+            editInfo.textContent = pixelInfoEnabled
+                ? "Modalita' Info pixel attiva. Clicca un pixel del TPF per vedere flux, RA e Dec."
+                : `Modalita' editing attiva: ${editMode}. Clicca un pixel del TPF per modificarlo e poi premi "Ricalcola light curve".`;
         }
     }
 
@@ -1158,7 +1283,9 @@
             backgroundModeButton.title = reason;
             recalcButton.title = reason;
         } else {
-            editInfo.textContent = `Modalita' editing attiva: ${editMode}. Clicca un pixel del TPF per modificarlo e poi premi "Ricalcola light curve".`;
+            editInfo.textContent = pixelInfoEnabled
+                ? "Modalita' Info pixel attiva. Clicca un pixel del TPF per vedere flux, RA e Dec."
+                : `Modalita' editing attiva: ${editMode}. Clicca un pixel del TPF per modificarlo e poi premi "Ricalcola light curve".`;
             targetModeButton.title = "Modalita' editing target attiva.";
             backgroundModeButton.title = "Modalita' editing background attiva.";
             recalcButton.title = "Ricalcola la light curve usando le maschere correnti.";
@@ -1760,6 +1887,12 @@
         renderCurrentTpfState();
     });
 
+    pixelInfoToggleButton.addEventListener("click", function () {
+        pixelInfoEnabled = !pixelInfoEnabled;
+        updatePixelInfoToggleButton();
+        updateEditingControls();
+    });
+
     gaiaSizeMaxMagInput.addEventListener("input", function () {
         renderCurrentTpfState();
     });
@@ -1912,6 +2045,7 @@
     updateGaiaOverlayToggleButton();
     updateGaiaSizeToggleButton();
     updateFixedScaleToggleButton();
+    updatePixelInfoToggleButton();
     updateLightcurveSeriesToggleButton(null);
     updateLightcurveDisplayToggleButton();
     setMastStatus(

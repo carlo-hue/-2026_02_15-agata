@@ -51,7 +51,18 @@ def point_is_inside_grid(x, y, shape: tuple[int, int] | list[int]) -> bool:
     return -0.5 <= px <= (cols - 0.5) and -0.5 <= py <= (rows - 0.5)
 
 
-def build_overlay_source_entry(source_id, x, y, gmag, ra=None, dec=None) -> dict:
+def build_overlay_source_entry(
+    source_id,
+    x,
+    y,
+    gmag,
+    ra=None,
+    dec=None,
+    dist_arcsec=None,
+    is_variable: bool = False,
+    variable_type=None,
+    variable_catalogs=None,
+) -> dict:
     return {
         "source_id": str(source_id),
         "x": rounded_or_none(x, 3),
@@ -59,6 +70,10 @@ def build_overlay_source_entry(source_id, x, y, gmag, ra=None, dec=None) -> dict
         "gmag": rounded_or_none(gmag, 4),
         "ra_deg": rounded_or_none(ra, 6),
         "dec_deg": rounded_or_none(dec, 6),
+        "dist_arcsec": rounded_or_none(dist_arcsec, 3),
+        "is_variable": bool(is_variable),
+        "variable_type": variable_type,
+        "variable_catalogs": list(variable_catalogs or []),
     }
 
 

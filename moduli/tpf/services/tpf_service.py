@@ -31,6 +31,7 @@ MAX_OVERLAY_SOURCES = 50
 AUTO_TARGET_THRESHOLD_SIGMA = 15.0
 AUTO_BACKGROUND_THRESHOLD_SIGMA = 0.001
 TIC_REFERENCE_RADIUS_ARCSEC = 5.0
+VSX_MATCH_RADIUS_ARCSEC = 2.0
 
 
 def _empty_masks_payload(message: str) -> dict:
@@ -213,12 +214,115 @@ def _estimate_overlay_radius_deg(shape: tuple[int, int] | list[int]) -> float:
     return round(radius_arcsec / 3600.0, 5)
 
 
+def _mark_overlay_gaia_variables(sources: list[dict]) -> None:
+    if not sources:
+        return
+    source_ids = [item.get("source_id") for item in sources if item.get("source_id")]
+    if not source_ids:
+        return
+    query = f"""
+        SELECT source_id, best_class_name
+        FROM gaiadr3.vari_summary
+        WHERE source_id IN ({", ".join(source_ids)})
+    """
+    try:
+        job = Gaia.launch_job(query)
+        results = job.get_results()
+        variable_map = {}
+        for row in results:
+            source_id = str(row["source_id"])
+            variable_map[source_id] = str(row["best_class_name"]) if row["best_class_name"] is not None else "Gaia DR3"
+        for source in sources:
+            variable_type = variable_map.get(source.get("source_id"))
+            if not variable_type:
+                source.setdefault("is_variable", False)
+                source.setdefault("variable_type", None)
+                source.setdefault("variable_catalogs", [])
+                continue
+            catalogs_list = list(source.get("variable_catalogs") or [])
+            if "Gaia DR3" not in catalogs_list:
+                catalogs_list.append("Gaia DR3")
+            source["is_variable"] = True
+            source["variable_type"] = variable_type
+            source["variable_catalogs"] = catalogs_list
+    except Exception:
+        LOGGER.exception("Gaia vari_summary overlay query failed.")
+        for source in sources:
+            source.setdefault("is_variable", False)
+            source.setdefault("variable_type", None)
+            source.setdefault("variable_catalogs", [])
+
+
+def _crossmatch_overlay_vsx(sources: list[dict], ra_center: float, dec_center: float, radius_deg: float) -> None:
+    if not sources:
+        return
+
+    try:
+        import astropy.units as u
+        import astropy.coordinates as coord
+        from astropy.coordinates import Angle, match_coordinates_sky
+        from astroquery.vizier import Vizier
+    except ImportError:
+        LOGGER.info("VSX cross-match skipped: astroquery.vizier non disponibile.")
+        return
+
+    try:
+        center = coord.SkyCoord(ra=ra_center * u.deg, dec=dec_center * u.deg, frame="icrs")
+        source_coords = coord.SkyCoord(
+            ra=[float(item["ra_deg"]) for item in sources] * u.deg,
+            dec=[float(item["dec_deg"]) for item in sources] * u.deg,
+            frame="icrs",
+        )
+        vizier = Vizier(columns=["OID", "Type", "Name", "RAJ2000", "DEJ2000"])
+        vizier.ROW_LIMIT = -1
+        catalogs = vizier.query_region(center, radius=Angle(radius_deg, unit=u.deg), catalog=["B/vsx/vsx"])
+        if catalogs is None or len(catalogs) == 0:
+            LOGGER.info("VSX cross-match: nessun match di catalogo nel campo overlay.")
+            return
+
+        vsx_table = catalogs[0]
+        if len(vsx_table) == 0:
+            LOGGER.info("VSX cross-match: catalogo vuoto nel campo overlay.")
+            return
+
+        vsx_coords = coord.SkyCoord(
+            ra=vsx_table["RAJ2000"],
+            dec=vsx_table["DEJ2000"],
+            unit=(u.deg, u.deg),
+            frame="icrs",
+        )
+        idx, sep2d, _ = match_coordinates_sky(source_coords, vsx_coords)
+        max_sep = VSX_MATCH_RADIUS_ARCSEC * u.arcsec
+        match_count = 0
+        for source_index, separation in enumerate(sep2d):
+            if separation > max_sep:
+                continue
+            source = sources[source_index]
+            row = vsx_table[idx[source_index]]
+            catalogs_list = list(source.get("variable_catalogs") or [])
+            if "AAVSO VSX" not in catalogs_list:
+                catalogs_list.append("AAVSO VSX")
+            source["variable_catalogs"] = catalogs_list
+            source["is_variable"] = True
+            if not source.get("variable_type") and "Type" in vsx_table.colnames:
+                source["variable_type"] = str(row["Type"]) if row["Type"] is not None else None
+            if "OID" in vsx_table.colnames and row["OID"] is not None:
+                source["variable_oid"] = str(row["OID"])
+            if "Name" in vsx_table.colnames and row["Name"] is not None:
+                source["variable_name"] = str(row["Name"])
+            match_count += 1
+        LOGGER.info("VSX cross-match overlay completato: %s stelle matchate.", match_count)
+    except Exception:
+        LOGGER.exception("VSX cross-match overlay fallito per gaia_source_id field center=(%s,%s)", ra_center, dec_center)
+
+
 def _build_target_position(target_info: dict, shape: tuple[int, int] | list[int], wcs) -> dict:
     rows = int(shape[0])
     cols = int(shape[1])
     fallback = {
         "x": round((cols - 1) / 2.0, 3),
         "y": round((rows - 1) / 2.0, 3),
+        "gmag": rounded_or_none(target_info.get("gmag"), 4),
         "source": "fallback-center",
     }
     if wcs is None:
@@ -233,6 +337,7 @@ def _build_target_position(target_info: dict, shape: tuple[int, int] | list[int]
         return {
             "x": rounded_or_none(x, 3),
             "y": rounded_or_none(y, 3),
+            "gmag": rounded_or_none(target_info.get("gmag"), 4),
             "source": "wcs",
         }
     except Exception:
@@ -260,18 +365,37 @@ def _fetch_gaia_overlay_sources(target_info: dict, shape: tuple[int, int] | list
         job = Gaia.launch_job_async(query)
         results = job.get_results()
         sources = []
+        target_coord = SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame="icrs")
         for row in results:
             source_id = str(row["source_id"])
             if source_id == target_info["gaia_source_id"]:
                 continue
             row_ra = float(row["ra"])
             row_dec = float(row["dec"])
+            row_coord = SkyCoord(ra=row_ra * u.deg, dec=row_dec * u.deg, frame="icrs")
+            dist_arcsec = float(target_coord.separation(row_coord).arcsec)
             x, y = wcs.all_world2pix(row_ra, row_dec, 0)
             if not point_is_inside_grid(x, y, shape):
                 continue
-            sources.append(build_overlay_source_entry(source_id, x, y, row["gmag"], row_ra, row_dec))
+            sources.append(
+                build_overlay_source_entry(
+                    source_id,
+                    x,
+                    y,
+                    row["gmag"],
+                    row_ra,
+                    row_dec,
+                    dist_arcsec=dist_arcsec,
+                    is_variable=False,
+                    variable_type=None,
+                    variable_catalogs=[],
+                )
+            )
+        _mark_overlay_gaia_variables(sources)
+        _crossmatch_overlay_vsx(sources, ra, dec, radius_deg)
         sources.sort(key=lambda item: item.get("gmag") if item.get("gmag") is not None else float("inf"))
-        return sources, f"Sorgenti Gaia overlay disponibili: {len(sources)} nel campo TPF."
+        variable_count = sum(1 for item in sources if item.get("is_variable"))
+        return sources, f"Sorgenti Gaia overlay disponibili: {len(sources)} nel campo TPF, variabili note: {variable_count}."
     except Exception:
         LOGGER.exception("Gaia overlay query failed for gaia_source_id=%s", target_info["gaia_source_id"])
         return [], "Overlay Gaia non disponibile: query Gaia fallita."
@@ -286,6 +410,7 @@ def _build_real_tpf_overlay(target_info: dict, tpf_payload: dict, wcs) -> dict:
         "message": overlay_message,
         "target_position": target_position,
         "gaia_sources": gaia_sources,
+        "variable_sources_count": sum(1 for item in gaia_sources if item.get("is_variable")),
     }
 
 
