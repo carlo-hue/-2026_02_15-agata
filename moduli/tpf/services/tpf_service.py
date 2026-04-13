@@ -11,7 +11,6 @@ from astropy.coordinates import SkyCoord
 
 from ..config import settings
 from .lightcurve_service import build_auto_masks, compute_lightcurve_stub, compute_real_lightcurve, normalize_manual_masks
-from .save_service import save_tpf_session_stub
 from .tpf_data_service import load_local_tpf, load_local_tpf_frames
 from .utils import (
     build_nearby_source_entry,
@@ -661,45 +660,6 @@ def run_tpf_pipeline(gaia_source_id: str, sector, masks: dict | None = None) -> 
                 "Light curve non disponibile: il TPF reale non e' stato trovato, resta attivo il fallback sintetico.",
             )
 
-        save_payload = {
-            "input": {"gaia_source_id": normalized_gaia_source_id, "sector": normalized_sector},
-            "target": target_info,
-            "tpf": {
-                "available": bool(tpf_payload.get("available")),
-                "source": tpf_payload.get("source"),
-                "metadata": tpf_payload.get("metadata"),
-                "masks": tpf_payload.get("masks"),
-            },
-            "lightcurve": lightcurve,
-        }
-        save_started_at = perf_counter()
-        try:
-            save_result = save_tpf_session_stub(save_payload)
-            LOGGER.info(
-                "TPF timing | gaia_source_id=%s sector=%s step=save_db elapsed_s=%.3f",
-                normalized_gaia_source_id,
-                normalized_sector,
-                perf_counter() - save_started_at,
-            )
-        except Exception as err:
-            LOGGER.exception(
-                "TPF save failed inside run pipeline for gaia_source_id=%s sector=%s",
-                normalized_gaia_source_id,
-                normalized_sector,
-            )
-            save_result = {
-                "status": "error",
-                "message": str(err),
-                "mode": "database",
-                "saved": False,
-                "save_id": None,
-                "summary": {
-                    "gaia_source_id": normalized_gaia_source_id,
-                    "sector": normalized_sector,
-                    "tpf_available": bool(tpf_payload.get("available")),
-                    "lightcurve_available": bool(lightcurve.get("available")),
-                },
-            }
         LOGGER.info(
             "TPF timing | gaia_source_id=%s sector=%s step=run_tpf_pipeline_total elapsed_s=%.3f mode=%s",
             normalized_gaia_source_id,
@@ -715,7 +675,19 @@ def run_tpf_pipeline(gaia_source_id: str, sector, masks: dict | None = None) -> 
             "target": target_info,
             "tpf": tpf_payload,
             "lightcurve": lightcurve,
-            "save": save_result,
+            "save": {
+                "status": "idle",
+                "message": "Nessun salvataggio automatico eseguito durante il Run.",
+                "mode": "manual",
+                "saved": False,
+                "save_id": None,
+                "summary": {
+                    "gaia_source_id": normalized_gaia_source_id,
+                    "sector": normalized_sector,
+                    "tpf_available": bool(tpf_payload.get("available")),
+                    "lightcurve_available": bool(lightcurve.get("available")),
+                },
+            },
         }
     except ValueError:
         LOGGER.warning(

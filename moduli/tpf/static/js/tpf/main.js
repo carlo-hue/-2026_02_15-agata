@@ -2,6 +2,7 @@
     const appRoot = document.getElementById("tpfApp");
     const gaiaSourceIdInput = document.getElementById("gaiaSourceIdInput");
     const saveButton = document.getElementById("saveButton");
+    const promoteButton = document.getElementById("promoteButton");
     const gaiaOverlayToggleButton = document.getElementById("gaiaOverlayToggleButton");
     const gaiaSizeToggleButton = document.getElementById("gaiaSizeToggleButton");
     const gaiaSizeMaxMagInput = document.getElementById("gaiaSizeMaxMagInput");
@@ -15,6 +16,7 @@
     const mastCutoutSizeInput = document.getElementById("mastCutoutSizeInput");
     const mastStatusInfo = document.getElementById("mastStatusInfo");
     const mastSectorsBox = document.getElementById("mastSectorsBox");
+    const sessionRestoreBox = document.getElementById("sessionRestoreBox");
     const frameSlider = document.getElementById("frameSlider");
     const frameIndexLabel = document.getElementById("frameIndexLabel");
     const frameTimeLabel = document.getElementById("frameTimeLabel");
@@ -25,6 +27,11 @@
     const errorBox = document.getElementById("errorBox");
     const output = document.getElementById("output");
     const returnPayloadBox = document.getElementById("returnPayloadBox");
+    const sessionChoiceDialog = document.getElementById("sessionChoiceDialog");
+    const sessionChoiceMessage = document.getElementById("sessionChoiceMessage");
+    const sessionChoiceUpdateButton = document.getElementById("sessionChoiceUpdateButton");
+    const sessionChoiceNewButton = document.getElementById("sessionChoiceNewButton");
+    const sessionChoiceCancelButton = document.getElementById("sessionChoiceCancelButton");
     const targetInfo = document.getElementById("targetInfo");
     const tpfInfo = document.getElementById("tpfInfo");
     const tpfHeaderMeta = document.getElementById("tpfHeaderMeta");
@@ -63,14 +70,17 @@
     let loadedFrameEndIndex = null;
     let lastMastSectorsResult = null;
     let mastHasRemoteResults = false;
+    let activeRestoredSessionId = null;
 
     if (
-        !appRoot || !gaiaSourceIdInput || !saveButton
+        !appRoot || !gaiaSourceIdInput || !saveButton || !promoteButton
         || !gaiaOverlayToggleButton || !gaiaSizeToggleButton || !gaiaSizeMaxMagInput || !fixedScaleToggleButton || !pixelInfoToggleButton || !targetModeButton || !backgroundModeButton || !recalcButton || !loadVisibleFramesButton
         || !frameSlider || !frameIndexLabel || !frameTimeLabel || !frameInfo || !loadFramesInfo
-        || !statusBox || !saveStatusBox || !errorBox || !output || !returnPayloadBox || !targetInfo
+        || !statusBox || !saveStatusBox || !errorBox || !output || !returnPayloadBox
+        || !sessionChoiceDialog || !sessionChoiceMessage || !sessionChoiceUpdateButton || !sessionChoiceNewButton || !sessionChoiceCancelButton
+        || !targetInfo
         || !tpfInfo || !tpfHeaderMeta || !overlayInfo || !tpfDetailsInfo || !overlayDetailsInfo || !lightcurveDetailsInfo
-        || !editInfo || !maskInfo || !lightcurveInfo || !tpfPlot || !lightcurvePlot
+        || !editInfo || !maskInfo || !lightcurveInfo || !tpfPlot || !lightcurvePlot || !sessionRestoreBox
     ) {
         return;
     }
@@ -83,7 +93,11 @@
         mastLocalSectorsUrl: appRoot.dataset.mastLocalSectorsUrl || "/tpf/api/mast/local-sectors",
         mastSectorsUrl: appRoot.dataset.mastSectorsUrl || "/tpf/api/mast/sectors",
         mastDownloadUrl: appRoot.dataset.mastDownloadUrl || "/tpf/api/mast/download",
+        sessionsUrl: appRoot.dataset.sessionsUrl || "/tpf/api/sessions",
+        restoreSessionUrl: appRoot.dataset.restoreSessionUrl || "/tpf/api/restore-session",
+        deleteSessionUrl: appRoot.dataset.deleteSessionUrl || "/tpf/api/delete-session",
         saveUrl: appRoot.dataset.saveUrl || "/tpf/api/save",
+        promoteUrl: appRoot.dataset.promoteUrl || "/tpf/api/promote",
     };
 
     const pageContext = {
@@ -139,6 +153,39 @@
         } else if (tone === "error") {
             mastStatusInfo.classList.add("is-error");
         }
+    }
+
+    function chooseSessionSaveMode(sessionId) {
+        return new Promise((resolve) => {
+            sessionChoiceMessage.textContent = `Sessione ${sessionId} caricata. Vuoi aggiornare la sessione esistente o crearne una nuova?`;
+            sessionChoiceDialog.classList.remove("hidden");
+            sessionChoiceDialog.setAttribute("aria-hidden", "false");
+
+            function cleanup(choice) {
+                sessionChoiceDialog.classList.add("hidden");
+                sessionChoiceDialog.setAttribute("aria-hidden", "true");
+                sessionChoiceUpdateButton.removeEventListener("click", onUpdate);
+                sessionChoiceNewButton.removeEventListener("click", onNew);
+                sessionChoiceCancelButton.removeEventListener("click", onCancel);
+                resolve(choice);
+            }
+
+            function onUpdate() {
+                cleanup("update");
+            }
+
+            function onNew() {
+                cleanup("new");
+            }
+
+            function onCancel() {
+                cleanup("cancel");
+            }
+
+            sessionChoiceUpdateButton.addEventListener("click", onUpdate);
+            sessionChoiceNewButton.addEventListener("click", onNew);
+            sessionChoiceCancelButton.addEventListener("click", onCancel);
+        });
     }
 
     function escapeHtml(text) {
@@ -498,6 +545,53 @@
 
         mastSectorsBox.className = "mast-sectors-box";
         mastSectorsBox.innerHTML = rowsHtml + footerHtml;
+    }
+
+    function renderSavedSessions(data) {
+        if (!sessionRestoreBox) {
+            return;
+        }
+
+        if (!data || !Array.isArray(data.sessions) || !data.sessions.length) {
+            const gaiaId = String(gaiaSourceIdInput.value || "").trim();
+            sessionRestoreBox.className = "mast-sectors-box empty-state";
+            sessionRestoreBox.innerHTML = gaiaId
+                ? "<div>Nessuna sessione tecnica salvata per questa sorgente.</div>"
+                : "<div>Inserisci un Gaia source id per vedere eventuali sessioni tecniche salvate.</div>";
+            return;
+        }
+
+        const rowsHtml = data.sessions.map((entry) => {
+            const sessionId = entry && entry.session_id !== undefined ? entry.session_id : "-";
+            const sector = entry && entry.sector !== undefined ? entry.sector : "-";
+            const maskOrigin = entry && entry.mask_origin ? entry.mask_origin : "-";
+            const savedAt = entry && entry.saved_at ? entry.saved_at : "-";
+            const promoted = entry && entry.is_promoted ? ` | promossa (${entry.promoted_points || 0} punti)` : "";
+            const filename = entry && entry.tpf_filename ? entry.tpf_filename : "TPF non specificato";
+            return `
+                <div class="mast-sector-row">
+                    <div class="mast-sector-meta">
+                        <div class="mast-sector-inline">Sessione ${escapeHtml(sessionId)} | sector ${escapeHtml(sector)} | ${escapeHtml(maskOrigin)} | ${escapeHtml(filename)}${escapeHtml(promoted)}</div>
+                        <div class="mast-sector-subtitle">Salvata il ${escapeHtml(savedAt)}</div>
+                    </div>
+                    <div class="mast-sector-actions">
+                        <button
+                            type="button"
+                            class="button-secondary"
+                            data-restore-session="${escapeHtml(sessionId)}"
+                        >Riprendi sessione</button>
+                        <button
+                            type="button"
+                            class="button-secondary"
+                            data-delete-session="${escapeHtml(sessionId)}"
+                        >Elimina</button>
+                    </div>
+                </div>
+            `;
+        }).join("");
+
+        sessionRestoreBox.className = "mast-sectors-box";
+        sessionRestoreBox.innerHTML = rowsHtml;
     }
 
     function renderTarget(target) {
@@ -1508,6 +1602,38 @@
         return { response, data };
     }
 
+    async function fetchSavedSessions(gaiaSourceId, sector) {
+        const response = await fetch(endpointUrls.sessionsUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                gaia_source_id: gaiaSourceId,
+                sector: sector || undefined,
+            }),
+        });
+        const data = await response.json().catch(() => ({ status: "error", message: "Risposta JSON non valida" }));
+        return { response, data };
+    }
+
+    async function refreshSavedSessions(gaiaSourceId, sector) {
+        if (!gaiaSourceId) {
+            renderSavedSessions(null);
+            return;
+        }
+        try {
+            const { response, data } = await fetchSavedSessions(gaiaSourceId, sector);
+            if (!response.ok || data.status === "error") {
+                renderSavedSessions(null);
+                return;
+            }
+            renderSavedSessions(data);
+        } catch (_) {
+            renderSavedSessions(null);
+        }
+    }
+
     async function downloadMastTpf(gaiaId, sector, cutoutSize) {
         const response = await fetch(endpointUrls.mastDownloadUrl, {
             method: "POST",
@@ -1562,8 +1688,17 @@
     }
 
     async function handlePipelineSuccess(data, statusMessage) {
+        pageContext.gaia_source_id = String((data && data.input && data.input.gaia_source_id) || pageContext.gaia_source_id || "");
+        pageContext.sector = String((data && data.input && data.input.sector) || pageContext.sector || "");
+        if (gaiaSourceIdInput) {
+            gaiaSourceIdInput.value = pageContext.gaia_source_id;
+        }
+        if (data && data.restored_session && data.restored_session.session_id) {
+            activeRestoredSessionId = String(data.restored_session.session_id);
+        }
         lastRunResult = data;
         saveButton.disabled = false;
+        promoteButton.disabled = false;
         syncMasksFromResult(data);
         syncFrameStateFromResult(data);
         const tpfAvailable = !!(data.tpf && data.tpf.available);
@@ -1572,9 +1707,13 @@
             statusMessage || data.message || `Pipeline completata | TPF: ${tpfAvailable ? "disponibile" : "non disponibile"} | Light curve: ${lcAvailable ? "disponibile" : "non disponibile"}`,
             "status-success"
         );
-        setSaveStatus("Risultato pronto per un salvataggio stub.", "status-neutral");
+        setSaveStatus("Risultato pronto per salvataggio tecnico o promozione.", "status-neutral");
         renderReturnPayloadPreview(lastRunResult);
         updateSections(data);
+        refreshSavedSessions(
+            String((data && data.input && data.input.gaia_source_id) || pageContext.gaia_source_id || ""),
+            null
+        );
     }
 
     function mergeLoadedFramesIntoResult(framesPayload) {
@@ -1606,6 +1745,7 @@
         setStatus("Loading... esecuzione pipeline in corso.", "status-neutral");
         setSaveStatus("Nessun salvataggio eseguito.", "status-neutral");
         output.textContent = JSON.stringify({ status: "ok", message: "Loading..." }, null, 2);
+        activeRestoredSessionId = null;
         lastRunResult = null;
         targetMask = [];
         backgroundMask = [];
@@ -1613,6 +1753,7 @@
         committedBackgroundMask = [];
         editingEnabled = false;
         saveButton.disabled = true;
+        promoteButton.disabled = true;
         updateEditingControls();
         resetFrameState();
         clearPlots();
@@ -1624,6 +1765,7 @@
             if (!response.ok || data.status === "error") {
                 lastRunResult = null;
                 saveButton.disabled = true;
+                promoteButton.disabled = true;
                 setStatus(data.message || "Pipeline completata con errore.", "status-error");
                 setError(data.message || `Errore HTTP ${response.status}`);
                 renderReturnPayloadPreview(null);
@@ -1636,6 +1778,7 @@
             const message = error instanceof Error ? error.message : String(error);
             lastRunResult = null;
             saveButton.disabled = true;
+            promoteButton.disabled = true;
             setStatus("Errore di rete durante la pipeline.", "status-error");
             setError(message);
             output.textContent = JSON.stringify({ status: "error", message }, null, 2);
@@ -1777,12 +1920,31 @@
         }
 
         setButtonBusy(saveButton, "Salvataggio...", true);
-        setSaveStatus("Salvataggio stub in corso...", "status-neutral");
+        setSaveStatus("Salvataggio sessione tecnica in corso...", "status-neutral");
         try {
-            const payloadToSave = {
-                ...lastRunResult,
-                agata_context: pageContext,
-            };
+            let updateSessionId = null;
+            if (activeRestoredSessionId) {
+                const saveChoice = await chooseSessionSaveMode(activeRestoredSessionId);
+                if (saveChoice === "cancel") {
+                    setSaveStatus("Salvataggio annullato dall'utente.", "status-neutral");
+                    return;
+                }
+                if (saveChoice === "update") {
+                    updateSessionId = activeRestoredSessionId;
+                }
+            }
+            const currentMasksPayload = editingEnabled
+                ? buildCurrentMasksPayload("manual-ui", 'Premi "Ricalcola light curve" per aggiornare la curva.')
+                : null;
+            const currentTpfPayload = buildCurrentTpfView();
+            const currentLightcurvePayload = lastRunResult.lightcurve ? {
+                ...lastRunResult.lightcurve,
+                masks: currentMasksPayload || (lastRunResult.lightcurve.masks || null),
+            } : null;
+            const payloadToSave = buildCurrentSavePayload(currentTpfPayload, currentLightcurvePayload);
+            if (updateSessionId) {
+                payloadToSave.technical_session = { update_session_id: updateSessionId };
+            }
             const response = await fetch(endpointUrls.saveUrl, {
                 method: "POST",
                 headers: {
@@ -1808,16 +1970,164 @@
                     summary: data.summary || null,
                 },
             };
+            activeRestoredSessionId = data && data.session && data.session.session_id
+                ? String(data.session.session_id)
+                : activeRestoredSessionId;
             renderReturnPayloadPreview(lastRunResult);
-            const suffix = data.mode === "stub" ? " (stub)" : "";
             const savedAt = data.saved_at_utc ? ` | ${data.saved_at_utc}` : "";
-            setSaveStatus(`${data.message || "Salvataggio completato."}${suffix}${savedAt}`, "status-success");
+            setSaveStatus(`${data.message || "Sessione tecnica salvata."}${savedAt}`, "status-success");
+            refreshSavedSessions(pageContext.gaia_source_id, null);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             setSaveStatus(`Errore di rete durante il salvataggio: ${message}`, "status-error");
         } finally {
             setButtonBusy(saveButton, "Salvataggio...", false);
             saveButton.disabled = !lastRunResult;
+            promoteButton.disabled = !lastRunResult;
+        }
+    }
+
+    function buildCurrentSavePayload(currentTpfPayload, currentLightcurvePayload) {
+        return {
+            ...lastRunResult,
+            tpf: currentTpfPayload || lastRunResult.tpf,
+            lightcurve: currentLightcurvePayload || lastRunResult.lightcurve,
+            agata_context: pageContext,
+        };
+    }
+
+    async function promoteCurrentResult() {
+        if (!lastRunResult) {
+            setSaveStatus("Nessun risultato disponibile da promuovere.", "status-error");
+            return;
+        }
+        const confirmed = window.confirm(
+            "Confermi la promozione della curva nel DB fotometrico?\n\nLa curva precedente per questo TPF verra' sostituita."
+        );
+        if (!confirmed) {
+            setSaveStatus("Promozione annullata dall'utente.", "status-neutral");
+            return;
+        }
+
+        setButtonBusy(promoteButton, "Promozione...", true);
+        setSaveStatus("Promozione curva in corso...", "status-neutral");
+        try {
+            const currentMasksPayload = editingEnabled
+                ? buildCurrentMasksPayload("manual-ui", 'Premi "Ricalcola light curve" per aggiornare la curva.')
+                : null;
+            const currentTpfPayload = buildCurrentTpfView();
+            const currentLightcurvePayload = lastRunResult.lightcurve ? {
+                ...lastRunResult.lightcurve,
+                masks: currentMasksPayload || (lastRunResult.lightcurve.masks || null),
+            } : null;
+            const payloadToPromote = buildCurrentSavePayload(currentTpfPayload, currentLightcurvePayload);
+            const response = await fetch(endpointUrls.promoteUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payloadToPromote),
+            });
+            const data = await response.json().catch(() => ({ status: "error", message: "Risposta JSON non valida" }));
+            output.textContent = JSON.stringify(data, null, 2);
+
+            if (!response.ok || data.status === "error") {
+                const savedAt = data.saved_at_utc ? ` | ${data.saved_at_utc}` : "";
+                setSaveStatus(`${data.message || `Errore HTTP ${response.status}`}${savedAt}`, "status-error");
+                return;
+            }
+
+            lastRunResult = {
+                ...lastRunResult,
+                save: {
+                    mode: data.mode,
+                    saved: data.saved,
+                    save_id: data.save_id,
+                    saved_at_utc: data.saved_at_utc,
+                    summary: data.summary || null,
+                },
+            };
+            renderReturnPayloadPreview(lastRunResult);
+            const savedAt = data.saved_at_utc ? ` | ${data.saved_at_utc}` : "";
+            setSaveStatus(`${data.message || "Promozione completata."}${savedAt}`, "status-success");
+            refreshSavedSessions(pageContext.gaia_source_id, null);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setSaveStatus(`Errore di rete durante la promozione: ${message}`, "status-error");
+        } finally {
+            setButtonBusy(promoteButton, "Promozione...", false);
+            saveButton.disabled = !lastRunResult;
+            promoteButton.disabled = !lastRunResult;
+        }
+    }
+
+    async function handleRestoreSession(sessionId, buttonElement) {
+        if (!sessionId) {
+            return;
+        }
+        setError("");
+        setButtonBusy(buttonElement, "Ripristino...", true);
+        setSaveStatus(`Ripristino della sessione ${sessionId} in corso...`, "status-neutral");
+        try {
+            const response = await fetch(endpointUrls.restoreSessionUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ session_id: sessionId }),
+            });
+            const data = await response.json().catch(() => ({ status: "error", message: "Risposta JSON non valida" }));
+            output.textContent = JSON.stringify(data, null, 2);
+            if (!response.ok || data.status === "error") {
+                setSaveStatus(data.message || `Errore HTTP ${response.status}`, "status-error");
+                return;
+            }
+            await handlePipelineSuccess(data, data.message || `Sessione ${sessionId} ripristinata.`);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setSaveStatus(`Errore di rete durante il ripristino: ${message}`, "status-error");
+        } finally {
+            setButtonBusy(buttonElement, "Ripristino...", false);
+        }
+    }
+
+    async function handleDeleteSession(sessionId, buttonElement) {
+        if (!sessionId) {
+            return;
+        }
+        const confirmed = window.confirm(
+            `Confermi l'eliminazione della sessione TPF ${sessionId}?\n\nL'operazione non modifica la fotometria gia' promossa.`
+        );
+        if (!confirmed) {
+            return;
+        }
+        setError("");
+        setButtonBusy(buttonElement, "Eliminazione...", true);
+        setSaveStatus(`Eliminazione della sessione ${sessionId} in corso...`, "status-neutral");
+        try {
+            const response = await fetch(endpointUrls.deleteSessionUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ session_id: sessionId }),
+            });
+            const data = await response.json().catch(() => ({ status: "error", message: "Risposta JSON non valida" }));
+            output.textContent = JSON.stringify(data, null, 2);
+            if (!response.ok || data.status === "error") {
+                setSaveStatus(data.message || `Errore HTTP ${response.status}`, "status-error");
+                return;
+            }
+            if (activeRestoredSessionId && String(activeRestoredSessionId) === String(sessionId)) {
+                activeRestoredSessionId = null;
+            }
+            setSaveStatus(data.message || `Sessione ${sessionId} eliminata.`, "status-success");
+            refreshSavedSessions(pageContext.gaia_source_id, null);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setSaveStatus(`Errore di rete durante l'eliminazione: ${message}`, "status-error");
+        } finally {
+            setButtonBusy(buttonElement, "Eliminazione...", false);
         }
     }
     function setCurrentFrameIndex(nextIndex) {
@@ -1985,6 +2295,27 @@
         });
     }
 
+    if (sessionRestoreBox) {
+        sessionRestoreBox.addEventListener("click", function (event) {
+            const restoreButton = event.target && typeof event.target.closest === "function"
+                ? event.target.closest("[data-restore-session]")
+                : null;
+            const deleteButton = event.target && typeof event.target.closest === "function"
+                ? event.target.closest("[data-delete-session]")
+                : null;
+            if (deleteButton) {
+                const sessionId = deleteButton.dataset.deleteSession;
+                handleDeleteSession(sessionId, deleteButton);
+                return;
+            }
+            if (!restoreButton) {
+                return;
+            }
+            const sessionId = restoreButton.dataset.restoreSession;
+            handleRestoreSession(sessionId, restoreButton);
+        });
+    }
+
     loadVisibleFramesButton.addEventListener("click", async function () {
         if (!lastRunResult || !lastRunResult.tpf || !lastRunResult.tpf.frames || !lastRunResult.tpf.frames.available) {
             return;
@@ -2041,6 +2372,10 @@
         saveCurrentResult();
     });
 
+    promoteButton.addEventListener("click", function () {
+        promoteCurrentResult();
+    });
+
     updateEditingControls();
     updateGaiaOverlayToggleButton();
     updateGaiaSizeToggleButton();
@@ -2059,7 +2394,9 @@
         null
     );
     renderMastSectors(null);
+    renderSavedSessions(null);
     renderReturnPayloadPreview(null);
+    refreshSavedSessions(pageContext.gaia_source_id, null);
     if (pageContext.overview_mode && pageContext.gaia_source_id) {
         handleMastSectorSearch();
     }

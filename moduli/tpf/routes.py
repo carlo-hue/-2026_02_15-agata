@@ -5,7 +5,7 @@ import logging
 from flask import Blueprint, current_app, jsonify, render_template, request, url_for
 
 from .config import settings
-from .services import download_tpf_from_mast, get_local_tpf_sectors_for_gaia, get_mast_sectors_for_gaia, load_tpf_frame_window, run_tpf_pipeline, save_tpf_session_stub
+from .services import delete_tpf_session, download_tpf_from_mast, get_local_tpf_sectors_for_gaia, get_mast_sectors_for_gaia, list_tpf_sessions, load_tpf_frame_window, promote_tpf_curve, restore_tpf_session, run_tpf_pipeline, save_tpf_session_stub
 from .services.utils import validate_cutout_size, validate_gaia_source_id, validate_sector
 
 LOGGER = logging.getLogger(__name__)
@@ -286,6 +286,98 @@ def create_blueprint() -> Blueprint:
             return _json_error(str(err), 400)
         except Exception as err:
             LOGGER.exception("TPF save failed for gaia_source_id=%s sector=%s", gaia_source_id, sector)
+            return _json_error(str(err), 502)
+        return jsonify(result)
+
+    @bp.post("/api/sessions")
+    def sessions_api():
+        payload = request.get_json(silent=True) or {}
+        if not isinstance(payload, dict):
+            return _json_error("payload JSON non valido", 400)
+
+        gaia_source_id = str(payload.get("gaia_source_id", "")).strip()
+        sector_raw = payload.get("sector")
+        if not gaia_source_id:
+            return _json_error("gaia_source_id mancante", 400)
+
+        sector = None
+        if sector_raw not in (None, ""):
+            try:
+                sector = validate_sector(sector_raw)
+            except ValueError as err:
+                return _json_error(str(err), 400)
+
+        try:
+            result = list_tpf_sessions(gaia_source_id=gaia_source_id, sector=sector)
+        except ValueError as err:
+            return _json_error(str(err), 400)
+        except Exception as err:
+            LOGGER.exception("TPF sessions listing failed for gaia_source_id=%s sector=%s", gaia_source_id, sector or "-")
+            return _json_error(str(err), 502)
+        return jsonify(result)
+
+    @bp.post("/api/restore-session")
+    def restore_session_api():
+        payload = request.get_json(silent=True) or {}
+        if not isinstance(payload, dict):
+            return _json_error("payload JSON non valido", 400)
+
+        session_id_raw = payload.get("session_id")
+        try:
+            session_id = int(session_id_raw)
+        except (TypeError, ValueError):
+            return _json_error("session_id non valido", 400)
+
+        try:
+            result = restore_tpf_session(session_id)
+        except ValueError as err:
+            return _json_error(str(err), 400)
+        except Exception as err:
+            LOGGER.exception("TPF restore failed for session_id=%s", session_id)
+            return _json_error(str(err), 502)
+        return jsonify(result)
+
+    @bp.post("/api/delete-session")
+    def delete_session_api():
+        payload = request.get_json(silent=True) or {}
+        if not isinstance(payload, dict):
+            return _json_error("payload JSON non valido", 400)
+
+        session_id_raw = payload.get("session_id")
+        try:
+            session_id = int(session_id_raw)
+        except (TypeError, ValueError):
+            return _json_error("session_id non valido", 400)
+
+        try:
+            result = delete_tpf_session(session_id)
+        except ValueError as err:
+            return _json_error(str(err), 400)
+        except Exception as err:
+            LOGGER.exception("TPF delete failed for session_id=%s", session_id)
+            return _json_error(str(err), 502)
+        return jsonify(result)
+
+    @bp.post("/api/promote")
+    def promote_api():
+        payload = request.get_json(silent=True) or {}
+        if not isinstance(payload, dict) or not payload:
+            return _json_error("payload di promozione mancante", 400)
+
+        gaia_source_id = "-"
+        sector = "-"
+        if isinstance(payload.get("input"), dict):
+            gaia_source_id = str(payload["input"].get("gaia_source_id") or "-")
+            sector = str(payload["input"].get("sector") or "-")
+        LOGGER.info("TPF promotion requested for gaia_source_id=%s sector=%s", gaia_source_id, sector)
+
+        try:
+            result = promote_tpf_curve(payload)
+        except ValueError as err:
+            LOGGER.warning("TPF promotion validation error for %s sector=%s: %s", gaia_source_id, sector, err)
+            return _json_error(str(err), 400)
+        except Exception as err:
+            LOGGER.exception("TPF promotion failed for gaia_source_id=%s sector=%s", gaia_source_id, sector)
             return _json_error(str(err), 502)
         return jsonify(result)
 

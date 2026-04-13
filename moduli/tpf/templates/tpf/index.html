@@ -43,6 +43,9 @@
             data-mast-local-sectors-url="{{ url_for('tpf.mast_local_sectors_api') }}"
             data-mast-sectors-url="{{ url_for('tpf.mast_sectors_api') }}"
             data-mast-download-url="{{ url_for('tpf.mast_download_api') }}"
+            data-sessions-url="{{ url_for('tpf.sessions_api') }}"
+            data-restore-session-url="{{ url_for('tpf.restore_session_api') }}"
+            data-delete-session-url="{{ url_for('tpf.delete_session_api') }}"
             data-save-url="{{ url_for('tpf.save_api') }}"
             data-mode="{{ page_context.mode }}"
             data-gaia-source-id="{{ page_context.gaia_source_id }}"
@@ -74,6 +77,7 @@
                     <button type="button" id="findMastSectorsButton" class="button-secondary">Controlla TPF locali</button>
                     {% endif %}
                     <button type="button" id="saveButton" class="button-secondary" disabled>Salva sessione</button>
+                    <button type="button" id="promoteButton" class="button-secondary" disabled>Promuovi curva</button>
                     {% if not (page_context.entrypoint == 'overview' and page_context.gaia_source_id) %}
                     <div id="mastStatusInfo" class="detail-block detail-text">Usa il Gaia source id sopra, poi premi "Controlla TPF locali".</div>
                     {% else %}
@@ -107,6 +111,7 @@
                     <button type="button" id="findMastSectorsButton" class="button-secondary">Controlla TPF locali</button>
                     {% endif %}
                     <button type="button" id="saveButton" class="button-secondary" disabled>Salva sessione</button>
+                    <button type="button" id="promoteButton" class="button-secondary" disabled>Promuovi curva</button>
                     {% if not (page_context.entrypoint == 'overview' and page_context.gaia_source_id) %}
                     <div id="mastStatusInfo" class="detail-block detail-text">Usa il Gaia source id sopra, poi premi "Controlla TPF locali".</div>
                     {% else %}
@@ -116,6 +121,11 @@
                 <div id="mastSectorsBox" class="mast-sectors-box empty-state">Nessun settore TESS caricato.</div>
             </section>
             {% endif %}
+
+            <section class="panel panel-mast">
+                <h2>Sessioni TPF salvate</h2>
+                <div id="sessionRestoreBox" class="mast-sectors-box empty-state">Nessuna sessione tecnica caricata.</div>
+            </section>
 
             <section class="grid-layout">
                 <section class="panel">
@@ -262,6 +272,18 @@
                 <pre id="output" class="output-box">{}</pre>
             </section>
         </main>
+    </div>
+
+    <div id="sessionChoiceDialog" class="modal-overlay hidden" aria-hidden="true">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="sessionChoiceTitle">
+            <h2 id="sessionChoiceTitle">Salvataggio sessione</h2>
+            <p id="sessionChoiceMessage" class="detail-text">Scegli come procedere con la sessione tecnica caricata.</p>
+            <div class="modal-actions">
+                <button type="button" id="sessionChoiceUpdateButton" class="button-secondary">Aggiorna esistente</button>
+                <button type="button" id="sessionChoiceNewButton" class="button-secondary">Nuova sessione</button>
+                <button type="button" id="sessionChoiceCancelButton" class="button-secondary">Annulla</button>
+            </div>
+        </div>
     </div>
 
     <script src="{{ url_for('tpf.static', filename='js/tpf/main.js') }}"></script>
